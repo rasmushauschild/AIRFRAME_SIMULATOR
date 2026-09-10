@@ -112,7 +112,8 @@ def build_app(state: AppState) -> FastAPI:
                 ready = ("takeoff" in can) or ("loiter" in can) or (aliases.get(mode_now, mode_now) in can.split("|"))
                 why = "" if ready else "PX4 will not arm yet (estimator or health checks); see the Flight tab"
                 break
-        s["arm_ready"] = bool(s["ctl_connected"]) and (ready or bool(s["armed"]))
+        s["resetting"] = max(0.0, state.conn._reset_busy_until - time.time())
+        s["arm_ready"] = bool(s["ctl_connected"]) and (ready or bool(s["armed"])) and s["resetting"] <= 0
         s["arm_block_reason"] = why
         s["px4_ports"] = [p["device"] for p in state.conn.list_ports_cached() if p["likely_px4"]]
         s["meta_loaded"] = len(state.meta)

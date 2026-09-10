@@ -181,6 +181,13 @@ class PX4Link:
         with self._ctl_lock:
             self.ctl.mav.command_long_send(self.target_system, self.target_component, command, 0, *p[:7])
 
+    def clear_actuators(self) -> None:
+        """Forget the last motor commands (e.g. on reset or while PX4 reboots) so the physics does not keep
+        flying on stale values."""
+        with self._act_cond:
+            self.actuators = [0.0] * 16
+            self.actuator_armed = False
+
     # --------------------------------------------------------------- lockstep
     def wait_for_actuators(self, seq_before: int, timeout: float) -> bool:
         """Block until a HIL_ACTUATOR_CONTROLS newer than seq_before arrives (lockstep)."""
@@ -199,7 +206,11 @@ class PX4Link:
             except Exception as e:  # serial unplugged etc.
                 if self._stop.is_set():
                     break
-                self.log(f"[link] read error on {name}: {e}")
+                if time.time() - getattr(self, "_last_read_err", 0.0) > 5.0:
+                    self.log(f"[link] {name} unavailable ({str(e)[:60]}), waiting for it to come back")
+                    self._last_read_err = time.time()
+                if is_hil:
+                    self.clear_actuators()
                 time.sleep(0.5)
                 continue
             if is_hil:

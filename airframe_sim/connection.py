@@ -432,37 +432,60 @@ class ConnectionManager:
             steps.append("estimator restarted")
         return {"ok": True, "steps": steps}
 
+    _reset_busy_until = 0.0
+
     def reset_all(self) -> dict:
-        """Full clean start: force-disarm, vehicle back on the ground, and PX4 rebooted (HITL) or relaunched (SITL)."""
+        """Put the whole simulation back to zero, fast: force-disarm, forget motor commands, vehicle back on the
+        ground at its hover attitude, PX4 messages cleared, and PX4 brought back to an armable state. Only when the
+        commander is in termination/failsafe (which nothing but a reboot clears) is the board rebooted."""
+        if time.time() < self._reset_busy_until:
+            return {"ok": True, "steps": [f"reset already in progress ({self._reset_busy_until - time.time():.0f} s left)"]}
         link = self.link
         steps = []
+        from .link import mavlink
         if link is not None and link.ctl_connected:
-            from .link import mavlink
             if link.armed:
                 link.send_command_long(mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0.0, 21196.0)
                 steps.append("force-disarmed")
-                time.sleep(1.0)
+                time.sleep(0.6)
+            link.recent_events.clear()
         self.sim.reset()
-        steps.append("sim reset")
-        if self.mode == "hitl" and link is not None and link.ctl_connected:
-            link.reboot()
-            self._after_reboot(link)
-            steps.append("board rebooted")
-        elif self.mode == "sitl":
+        steps.append("vehicle reset")
+        if link is None or not link.ctl_connected:
+            return {"ok": True, "steps": steps}
+        main_mode = (link.custom_mode >> 16) & 0xFF
+        if self.mode == "hitl":
+            if main_mode == 10:   # Termination: only a reboot clears it
+                self._reset_busy_until = time.time() + 30
+                link.reboot()
+                self._after_reboot(link)
+                steps.append("board rebooted (was in flight termination)")
+            else:
+                self._reset_busy_until = time.time() + 8
+                threading.Thread(target=self._settle_after_reset, args=(link,), daemon=True).start()
+                steps.append("estimator restarting")
+        else:
             with self._lock:
-                if self.px4_running():
-                    self.stop_px4()
-                    steps.append("PX4 SITL stopped")
-                    time.sleep(1.0)
-                if self.args.launch_px4:
-                    try:
-                        self.px4_process = launch_px4(self.args.px4_dir, self.args.px4_model, self.log,
-                                                      instance=self.px4_instance or 0, rootfs=self.args.px4_rootfs)
-                        steps.append("PX4 SITL relaunched")
-                    except RuntimeError as e:
-                        self.error = str(e)
-                        steps.append(f"relaunch failed: {e}")
+                if main_mode == 10 and self.px4_running() and self.args.launch_px4:
+                    self._reset_busy_until = time.time() + 20
+                    self.stop_px4(); time.sleep(1.0)
+                    self.px4_process = launch_px4(self.args.px4_dir, self.args.px4_model, self.log,
+                                                  instance=self.px4_instance or 0, rootfs=self.args.px4_rootfs)
+                    steps.append("PX4 SITL relaunched (was in flight termination)")
+                else:
+                    self._reset_busy_until = time.time() + 8
+                    threading.Thread(target=self._settle_after_reset, args=(link,), daemon=True).start()
+                    steps.append("estimator restarting")
         return {"ok": True, "steps": steps}
+
+    def _settle_after_reset(self, link) -> None:
+        """Let the fresh sensor data flow for a moment, then restart EKF2 so it re-aligns on the reset vehicle."""
+        time.sleep(2.0)
+        if self.link is link:
+            try:
+                link.restart_estimator()
+            except Exception as e:
+                self.log(f"[px4] estimator restart failed: {e}")
 
     def restart_estimator(self) -> dict:
         link = self.link
@@ -608,6 +631,7 @@ class ConnectionManager:
             "busy": self.busy,
             "px4_running": self.px4_running(),
             "flashing": self.firmware_job.running() and self.firmware_job.action == "upload",
+            "resetting": max(0.0, self._reset_busy_until - time.time()),
             "px4_instance": self.px4_instance,
             "ports": self.list_ports_cached(0.5),
             "qgc": self.args.qgc,

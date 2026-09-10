@@ -59,6 +59,9 @@ class Simulator:
     def reset(self, yaw: float = 0.0) -> None:
         with self.lock:
             self.sim.reset(yaw=yaw)
+            self.motor_override = None
+            if self.link is not None:
+                self.link.clear_actuators()
 
     def set_airframe(self, airframe: Airframe, keep_state: bool = True) -> None:
         with self.lock:

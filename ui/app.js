@@ -434,9 +434,9 @@ $('#param-meta-fetch').addEventListener('click', async () => {
 $$('#tab-sim button[data-cmd]').forEach(b => b.addEventListener('click', () =>
   api('/api/px4/command', { command: b.dataset.cmd, mode: b.dataset.mode, force: b.dataset.cmd === 'kill' }).catch(e => logLine('[ui] ' + e.message))));
 async function recover(btn, full) {
-  const label = btn.textContent; btn.textContent = full ? 'Resetting…' : 'Recovering…'; btn.disabled = true;
-  try { const r = await api(full ? '/api/px4/reset_all' : '/api/px4/recover', {}); logLine('[ui] ' + (full ? 'reset' : 'recover') + ': ' + (r.steps || []).join(', ')); }
-  catch (e) { logLine('[ui] ' + (full ? 'reset' : 'recover') + ' failed: ' + e.message); }
+  const label = btn.textContent; btn.textContent = 'Resetting…'; btn.disabled = true;
+  try { const r = await api('/api/px4/reset_all', {}); logLine('[ui] reset: ' + (r.steps || []).join(', ')); }
+  catch (e) { logLine('[ui] reset failed: ' + e.message); }
   btn.textContent = label; btn.disabled = false;
 }
 $('#btn-reset').addEventListener('click', (e) => recover(e.target, true));     // everything: vehicle + PX4 reboot
@@ -476,7 +476,7 @@ function applyStatus(s) {
   if (s.flashing) { $('#st-mode').textContent = 'Pixhawk'; $('#st-conn').textContent = 'flashing firmware…'; }
   det.classList.toggle('hidden', !showDet); det.classList.toggle('blink', showDet);
   if (showDet) det.textContent = `Pixhawk on ${s.px4_ports[0].replace('/dev/', '')} · connect`;
-  $('#st-armed').textContent = s.armed ? 'Armed' : 'Disarmed';
+  $('#st-armed').textContent = s.resetting > 0 ? `Resetting… ${Math.ceil(s.resetting)} s` : (s.armed ? 'Armed' : 'Disarmed');
   $('#st-armed').classList.toggle('armed', s.armed);
   $('#st-flightmode').textContent = s.connected ? s.mode_name + (s.mode === 'hitl' && !s.hil_enabled ? ' · HIL OFF (set SYS_HITL=1)' : '') : '—';
   if (!homeFilled) { $('#home-lat').value = s.home.lat; $('#home-lon').value = s.home.lon; $('#home-alt').value = s.home.alt; homeFilled = true; }
@@ -585,10 +585,16 @@ async function refreshEvents() {
     if (summary) {
       const d = {}; (summary.arg_names || []).forEach((k, i) => d[k] = summary.args[i]);
       const canArm = String(d.can_arm || '').split('|').filter(x => x && !/^\d+$/.test(x));
+      const errs = String(d.error || '').split('|').filter(x => x && x !== '0' && x.toLowerCase() !== 'system');   // "system" = offboard/mission checks
       html += `<div class="conn-row"><div><b>${canArm.length ? 'Can arm in' : 'Cannot arm'}</b> <span class="hint">${canArm.length ? canArm.join(', ') : 'see messages below'}</span>` +
-        `${d.error && d.error !== 0 ? `<div class="err">errors: ${String(d.error).replace(/\|/g, ', ')}</div>` : ''}${d.warning && d.warning !== 0 ? `<div class="warn">warnings: ${String(d.warning).replace(/\|/g, ', ')}</div>` : ''}</div></div>`;
+        `${errs.length ? `<div class="err">blocking: ${errs.join(', ').replace(/_/g, ' ')}</div>` : ''}</div></div>`;
     }
-    const shown = ev.filter(x => x.level <= 6 && x.group !== 'protocol' && !x.name.includes('summary')).slice(-10).reverse();
+    // only checks that matter for the current mode; offboard/mission checks always fail elsewhere
+    const modeNow = (status.mode_name || '').toLowerCase();
+    const seen = new Set();
+    const shown = ev.filter(x => x.level <= 6 && x.group !== 'protocol' && !x.name.includes('summary'))
+      .filter(x => !(/offboard/i.test(x.text) && modeNow !== 'offboard') && !(/mission/i.test(x.text) && modeNow !== 'mission'))
+      .reverse().filter(x => { if (seen.has(x.text)) return false; seen.add(x.text); return true; }).slice(0, 8);
     html += shown.map(x => `<div class="msg ${x.level <= 3 ? 'err' : x.level === 4 ? 'warn' : ''}"><span class="lvl">${x.level_name}</span> ${x.text}</div>`).join('') || '<div class="hint">no messages from PX4 yet</div>';
     el.innerHTML = html;
   } catch (e) { }
