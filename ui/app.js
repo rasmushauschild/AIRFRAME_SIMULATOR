@@ -116,6 +116,15 @@ const setLegs = () => {
 };
 bindNumber('af-legz', setLegs);
 bindNumber('af-legxy', setLegs);
+// legs that hold the airframe at its hover pitch on the ground: a flat rectangle under the vehicle in the hover
+// frame, rotated back into the structural frame
+$('#af-legs-hover').addEventListener('click', () => {
+  const phi = (airframe.hover_pitch_deg || 0) * Math.PI / 180, c = Math.cos(phi), sn = Math.sin(phi);
+  const h = parseFloat($('#af-legz').value) || 0.2, sp = parseFloat($('#af-legxy').value) || 0.2;
+  const toStructural = ([x, y, z]) => [c * x - sn * z, y, sn * x + c * z];   // inverse of the hover rotation
+  airframe.leg_points = [[sp, sp, h], [sp, -sp, h], [-sp, sp, h], [-sp, -sp, h]].map(toStructural).map(v => v.map(x => +x.toFixed(3)));
+  scene.setAirframe(airframe); pushAirframe(true); api('/api/sim/reset', {});
+});
 $('#af-estimate').addEventListener('click', async () => {
   await api('/api/airframe', { airframe, keep_state: true });
   const r = await api('/api/airframe/estimate_inertia', {});
@@ -582,11 +591,13 @@ async function refreshConnection() {
     ${s.action === 'build_firmware' ? '<button class="pill small primary" data-act="build_firmware">Build firmware</button>' : ''}
     ${s.action === 'upload_firmware' ? '<button class="pill small primary" data-act="upload_firmware">Flash firmware</button>' : ''}
     ${s.action === 'push' ? '<button class="pill small primary" data-act="push">Push geometry</button>' : ''}
-    ${s.action === 'reboot' ? '<button class="pill small" data-act="reboot">Reboot board</button>' : ''}</div>`).join('');
+    ${s.action === 'reboot' ? '<button class="pill small" data-act="reboot">Reboot board</button>' : ''}
+    ${s.action === 'ekf' ? '<button class="pill small" data-act="ekf">Restart estimator</button>' : ''}</div>`).join('');
   $$('#conn-checklist button[data-act]').forEach(b => b.addEventListener('click', async () => {
     if (b.dataset.act === 'enable_hitl') { b.textContent = 'Rebooting…'; await connCall('/api/connection/enable_hitl', {}); }
     if (b.dataset.act === 'push') { if (status.armed) { alert('Disarm before updating PX4'); return; } await pushToPX4($('#update-status'), true); await refreshConnection(); }
     if (b.dataset.act === 'build_firmware') { b.textContent = 'Building…'; await connCall('/api/firmware/build', {}); }
+    if (b.dataset.act === 'ekf') { b.textContent = 'Restarting…'; await api('/api/connection/restart_estimator', {}); setTimeout(refreshConnection, 3000); }
     if (b.dataset.act === 'reboot') { b.textContent = 'Rebooting…'; await api('/api/px4/command', { command: 'reboot' }); setTimeout(refreshConnection, 3000); }
     if (b.dataset.act === 'upload_firmware') {
       if (!confirm('Flash the HITL-capable firmware to the board now? It reboots and reconnects when done. Parameters are kept.')) return;

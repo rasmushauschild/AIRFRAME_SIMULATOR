@@ -467,6 +467,14 @@ class PX4Link:
             out = bytes(self._shell_buf).decode(errors="replace")
         return out.replace("\r", "")
 
+    def restart_estimator(self) -> str:
+        """Restart EKF2 on the vehicle (after a board-rotation change, or when it initialised on bad data)."""
+        self.log("[px4] restarting the estimator (ekf2 stop / start)")
+        out = self.shell("ekf2 stop", timeout=2.0)
+        time.sleep(0.5)
+        out += self.shell("ekf2 start", timeout=2.0)
+        return out
+
     def request_autopilot_version(self) -> None:
         self.send_command_long(mavlink.MAV_CMD_REQUEST_MESSAGE, float(mavlink.MAVLINK_MSG_ID_AUTOPILOT_VERSION))
 

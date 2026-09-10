@@ -403,6 +403,13 @@ class ConnectionManager:
         return r
 
     # ------------------------------------------------------------ HITL helpers
+    def restart_estimator(self) -> dict:
+        link = self.link
+        if link is None or not link.ctl_connected:
+            return {"ok": False, "error": "not connected"}
+        out = link.restart_estimator()
+        return {"ok": True, "output": out[-300:]}
+
     def enable_hitl(self) -> dict:
         """Set SYS_HITL=1 on the board, save, reboot. The serial link reconnects by itself."""
         link = self.link
@@ -482,7 +489,8 @@ class ConnectionManager:
                       "detail": ("can arm in: " + can_arm.replace("|", ", ") if ready else
                                  (("; ".join(dict.fromkeys(blockers)) or "waiting for the arming check report…") if streaming else "")) +
                                 ("" if not streaming or ready else " · if this never clears after a sim reset, reboot the board so the estimator starts clean"),
-                      "action": "reboot" if (streaming and not ready) else None})
+                      "action": ("ekf" if any(k in " ".join(blockers).lower() for k in ("attitude", "accel", "height", "velocity"))
+                                 else "reboot") if (streaming and not ready) else None})
         if export_params is not None and hitl and params_ok:
             diff = [k for k, v in export_params.items() if k in link.params and abs(float(link.params[k]["value"]) - float(v)) > 1e-4]
             missing = [k for k in export_params if k not in link.params]
@@ -502,6 +510,19 @@ class ConnectionManager:
             ports = list_serial_ports()
             self._ports_cache = (time.time(), ports)
         return ports
+
+    def _post_boot_ekf_restart(self, link, session: int) -> None:
+        t0 = time.time()
+        while time.time() - t0 < 30 and self.link is link and self._params_session == session:
+            if link.hil_enabled and link.actuator_seq > 200:
+                time.sleep(5.0)
+                if self.link is link and self._params_session == session:
+                    try:
+                        link.restart_estimator()
+                    except Exception as e:
+                        self.log(f"[px4] estimator restart failed: {e}")
+                return
+            time.sleep(0.5)
 
     # ------------------------------------------------------------ status
     def status(self) -> dict:
@@ -544,4 +565,8 @@ class ConnectionManager:
                         self.on_params()
                 except Exception as e:
                     self.log(f"[params] fetch failed: {e}")
+                # HITL: the board booted while our sensor stream was (re)starting and the EKF often initialises on
+                # the first bad samples. Once HIL data has flowed for a few seconds, restart the estimator once.
+                if link.mode == "hitl":
+                    threading.Thread(target=self._post_boot_ekf_restart, args=(link, self._params_session), daemon=True).start()
             was_up = up

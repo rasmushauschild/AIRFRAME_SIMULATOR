@@ -198,6 +198,10 @@ def build_app(state: AppState) -> FastAPI:
     async def disconnect():
         return await run_in_threadpool(state.conn.disconnect)
 
+    @app.post("/api/connection/restart_estimator")
+    async def restart_estimator():
+        return await run_in_threadpool(state.conn.restart_estimator)
+
     @app.post("/api/connection/enable_hitl")
     async def enable_hitl():
         return await run_in_threadpool(state.conn.enable_hitl)
@@ -304,6 +308,7 @@ def build_app(state: AppState) -> FastAPI:
         else:
             missing = []
         state.export_log.clear()
+        rot_before = link.params.get("SENS_BOARD_Y_OFF", {}).get("value")
 
         def progress(name, res):
             state.export_log.append({"t": time.time(), **res})
@@ -312,6 +317,13 @@ def build_app(state: AppState) -> FastAPI:
         ok = all(r["ok"] for r in results)
         if body.get("save", True) and ok:
             link.preflight_storage(True)
+        rot_after = params.get("SENS_BOARD_Y_OFF")
+        if ok and rot_after is not None and rot_before is not None and abs(float(rot_after) - float(rot_before)) > 1e-3:
+            # the IMU frame just changed under the running estimator: rest the sim at the new hover attitude and
+            # restart EKF2 so it aligns from clean data
+            state.log(f"[export] board rotation changed ({rot_before} -> {rot_after} deg): resetting sim, restarting estimator")
+            sim.reset()
+            await run_in_threadpool(link.restart_estimator)
         failed = [r for r in results if not r["ok"]]
         state.log(f"[export] pushed {len(results) - len(failed)}/{len(results)} params to PX4"
                   + (f", failed: {[r['name'] for r in failed]}" if failed else ""))
