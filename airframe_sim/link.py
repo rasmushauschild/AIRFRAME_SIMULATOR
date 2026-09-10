@@ -472,7 +472,23 @@ class PX4Link:
         self.send_command_long(mavlink.MAV_CMD_PREFLIGHT_STORAGE, 1.0 if save else 0.0)
 
     def reboot(self) -> None:
+        """Reboot the autopilot. The commander refuses the MAVLink reboot in some states (e.g. flight
+        termination), so fall back to the nsh `reboot` command over the MAVLink shell."""
+        self.last_ack = {}
         self.send_command_long(mavlink.MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN, 1.0)
+        t0 = time.time()
+        while time.time() - t0 < 2.0:
+            ack = self.last_ack
+            if ack.get("command") == mavlink.MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN:
+                if ack.get("result") == 0:
+                    return
+                break
+            time.sleep(0.05)
+        self.log("[px4] reboot command not accepted, rebooting through the shell")
+        try:
+            self.shell("reboot", timeout=1.0)
+        except Exception as e:
+            self.log(f"[px4] shell reboot failed: {e}")
 
     def status(self) -> dict:
         return {
