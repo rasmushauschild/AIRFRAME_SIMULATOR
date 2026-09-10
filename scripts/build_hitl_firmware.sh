@@ -12,6 +12,8 @@ ACTION="${2:-build}"
 PX4_DIR="${PX4_DIR:-$HOME/PX4-Autopilot}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 export PATH="$HERE/.venv/bin:$PATH"
+# Homebrew's arm-gcc-bin@13 is keg-only unless linked; use it directly when present.
+for d in /opt/homebrew/opt/arm-gcc-bin@13/bin /usr/local/opt/arm-gcc-bin@13/bin; do [ -d "$d" ] && export PATH="$d:$PATH"; done
 
 if ! command -v arm-none-eabi-gcc >/dev/null; then
   echo "arm-none-eabi-gcc not found. Install the toolchain first:"
@@ -28,6 +30,9 @@ else
   echo "enabling pwm_out_sim in $CFG"
   echo "CONFIG_MODULES_SIMULATION_PWM_OUT_SIM=y" >> "$CFG"
 fi
+
+restore_cfg() { git checkout -q -- "$CFG" 2>/dev/null || true; }
+trap restore_cfg EXIT      # leave the checkout clean; the built .px4 keeps the module regardless
 
 make "${BOARD}_default"
 OUT="build/${BOARD}_default/${BOARD}_default.px4"

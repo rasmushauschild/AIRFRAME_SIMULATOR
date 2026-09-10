@@ -316,9 +316,11 @@ class ConnectionManager:
                 return {"device": p["device"], "description": p["description"], "target": t}
         return {"device": None, "description": None, "target": None}
 
+    TOOLCHAIN_DIRS = ("/opt/homebrew/opt/arm-gcc-bin@13/bin", "/usr/local/opt/arm-gcc-bin@13/bin")
+
     def toolchain_present(self) -> bool:
         from shutil import which
-        return which("arm-none-eabi-gcc") is not None
+        return which("arm-none-eabi-gcc") is not None or any(Path(d, "arm-none-eabi-gcc").is_file() for d in self.TOOLCHAIN_DIRS)
 
     def firmware_file(self, target: str | None) -> str | None:
         if not target:
