@@ -366,7 +366,7 @@ class ConnectionManager:
                 self._close_link()
                 time.sleep(0.5)
         venv_bin = str(PROJECT_DIR / ".venv" / "bin")
-        r = self.firmware_job.start(target, "upload", self.args.px4_dir, venv_bin)
+        r = self.firmware_job.start(target, "upload", self.args.px4_dir, venv_bin, ref=self.board_release_tag())
         if r.get("ok") and was_hitl:
             def reconnect():
                 while self.firmware_job.running():

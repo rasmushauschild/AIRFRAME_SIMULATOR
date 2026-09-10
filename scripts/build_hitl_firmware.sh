@@ -58,14 +58,27 @@ fi
 cleanup() { git checkout -q -- "$CFG" 2>/dev/null || true; restore_ref; }
 trap cleanup EXIT          # leave the checkout clean; the built .px4 keeps the module regardless
 
-make "$TARGET"
 OUT="build/$TARGET/$TARGET.px4"
+if [ "$ACTION" != "upload" ] || [ ! -f "$OUT" ]; then
+  make "$TARGET"
+fi
 echo
 echo "Firmware: $PX4_DIR/$OUT"
 echo "Flash it with QGroundControl (Vehicle Setup > Firmware > Advanced > Custom firmware file),"
 echo "or run:  scripts/build_hitl_firmware.sh $BOARD upload $VARIANT"
 
 if [ "$ACTION" = "upload" ]; then
-  echo "Uploading over USB — if it waits, unplug and replug the board."
-  make "$TARGET" upload
+  # Call the uploader directly rather than `make upload`, which would re-run the build with whatever
+  # sources are checked out. The uploader asks the running firmware to reboot into the bootloader.
+  UPLOADER=""
+  for c in Tools/px_uploader.py Tools/px_uploader/px_uploader.py platforms/nuttx/Debug/px_uploader.py; do
+    [ -f "$c" ] && { UPLOADER="$c"; break; }
+  done
+  [ -n "$UPLOADER" ] || UPLOADER="$(git ls-files | grep -m1 'px_uploader.py$' || true)"
+  if [ -z "$UPLOADER" ]; then   # newer trees dropped it; borrow the v1.17.0 copy
+    mkdir -p build && git show v1.17.0:Tools/px_uploader.py > build/px_uploader.py && UPLOADER=build/px_uploader.py
+  fi
+  [ -n "$UPLOADER" ] || { echo "px_uploader.py not found in $PX4_DIR"; exit 1; }
+  echo "Uploading $OUT over USB with $UPLOADER — if it waits, unplug and replug the board."
+  python3 "$UPLOADER" --port "/dev/tty.usbmodemPX*,/dev/tty.usbmodem*,/dev/ttyACM*" "$OUT"
 fi
