@@ -76,6 +76,7 @@
         <label>Iyy <input id="af-iyy" type="number" step="0.001"></label>
         <label>Izz <input id="af-izz" type="number" step="0.001"></label>
         <button id="af-estimate" class="pill small" title="Estimate inertia from mass and rotor layout">Estimate</button>
+        <label title="Nose-up pitch of the airframe in hover. PX4 treats this attitude as level: the geometry is exported rotated into that frame and SENS_BOARD_Y_OFF is set to match.">Hover pitch° <input id="af-hover" type="number" step="1" min="-90" max="90"></label>
       </div>
 
       <h3>Rotors <small>· PX4 body frame FRD: X forward, Y right, Z down, metres</small></h3>

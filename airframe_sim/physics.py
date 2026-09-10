@@ -108,16 +108,18 @@ class RigidBodySim:
         self.t = 0.0
         self.pos = np.zeros(3)
         self.vel = np.zeros(3)
-        self.q = q_from_euler(0.0, 0.0, yaw)
+        pitch = np.radians(float(getattr(self.af, "hover_pitch_deg", 0.0)))   # rest in the hover attitude
+        self.q = q_from_euler(0.0, pitch, yaw)
         self.rates = np.zeros(3)
         self.omega = np.zeros(len(self.af.rotors))
         self.cmd = np.zeros(len(self.af.rotors))
         self.thrust = np.zeros(len(self.af.rotors))
         self.accel_body = np.array([0.0, 0.0, -G])  # specific force, what an accelerometer reads
         self.on_ground = True
-        # rest the legs on the ground: lowest leg point at z = 0
+        # rest the legs on the ground: lowest leg point (in the rest attitude) at z = 0
         if len(self.legs):
-            self.pos[2] = -float(np.max(self.legs[:, 2]))
+            R = q_to_rotmat(self.q)
+            self.pos[2] = -float(np.max((self.legs @ R.T)[:, 2]))
 
     def set_motor_commands(self, cmd) -> None:
         c = np.asarray(cmd, dtype=float)[: len(self.cmd)]

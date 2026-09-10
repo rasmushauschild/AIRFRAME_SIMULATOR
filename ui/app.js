@@ -67,6 +67,7 @@ function setAirframe(af) {
   $('#title-name').textContent = af.name;
   $('#af-mass').value = af.mass;
   ['ixx', 'iyy', 'izz'].forEach((k, i) => $('#af-' + k).value = +af.inertia[i].toFixed(5));
+  $('#af-hover').value = af.hover_pitch_deg || 0;
   ['dragx', 'dragy', 'dragz'].forEach((k, i) => $('#af-' + k).value = af.drag_quadratic[i]);
   ['bx', 'by', 'bz'].forEach((k, i) => $('#af-' + k).value = af.body_size[i]);
   if (af.leg_points && af.leg_points.length) {
@@ -102,6 +103,7 @@ bindNumber('af-mass', v => airframe.mass = v);
 bindNumber('af-ixx', v => airframe.inertia[0] = v);
 bindNumber('af-iyy', v => airframe.inertia[1] = v);
 bindNumber('af-izz', v => airframe.inertia[2] = v);
+bindNumber('af-hover', v => airframe.hover_pitch_deg = v);
 bindNumber('af-dragx', v => airframe.drag_quadratic[0] = v);
 bindNumber('af-dragy', v => airframe.drag_quadratic[1] = v);
 bindNumber('af-dragz', v => airframe.drag_quadratic[2] = v);

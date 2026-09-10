@@ -141,6 +141,23 @@ the CG. PX4 does not know about this; it just sees the resulting motion through 
 Low `km` also means little yaw authority from torque differences. PX4's allocator then needs large thrust differences
 to yaw, which the hover check on the Geometry tab reflects.
 
+## Hover pitch (aircraft that hover nose-up)
+
+If the ducts/rotors are tilted forward for cruise, the aircraft has to hover pitched nose-up so the thrust axes point
+at the sky. PX4's multirotor mode holds its body frame level, so the trick is to tell PX4 that *its* level is your
+airframe at that pitch. Set **Hover pitch°** on the Geometry tab:
+
+* rotor positions and axes are exported rotated into that frame (`CA_ROTORn_*`);
+* `SENS_BOARD_Y_OFF` is exported with the same angle, so the IMU mounted in the structural frame is read in the hover
+  frame (on the real vehicle this is the same parameter you would set; keep `SENS_BOARD_ROT` for the board's mounting);
+* the simulator rests and reports the vehicle in the structural frame, so you see it sit and hover nose-up while PX4
+  reports pitch ≈ 0.
+
+Verified in SITL: all ten ducts at 45°, hover pitch 45° → takes off, rotates to 46° nose-up and holds altitude with
+PX4 reporting +1° pitch. The hover check runs in the hover frame; it will tell you when the axes are not vertical in
+hover (residual force → PX4 leans) or when yaw cannot be cancelled (all rotors spinning the same way with parallel
+axes: alternate spins or cant rotors in opposing pairs).
+
 ## Notes and limits
 
 * The physics is a clean rigid body with per-rotor thrust/torque, quadratic drag and spring-damper legs. There is no

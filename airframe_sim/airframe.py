@@ -81,6 +81,24 @@ class Airframe:
         [0.10, 0.10, 0.12], [0.10, -0.10, 0.12], [-0.10, 0.10, 0.12], [-0.10, -0.10, 0.12],
     ])  # ground contact points, FRD
     rotors: list[Rotor] = field(default_factory=list)
+    hover_pitch_deg: float = 0.0   # nose-up pitch of the structural frame in hover; PX4's "level" is this attitude
+
+    # ------------------------------------------------------- hover frame
+    def hover_rotation(self):
+        """Rotation matrix taking structural-frame vectors into PX4's body frame (the aircraft pitched nose-up
+        by hover_pitch_deg is 'level' for PX4). x_structural -> (cos, 0, -sin): the nose points up."""
+        import numpy as np
+        phi = math.radians(self.hover_pitch_deg)
+        c, s_ = math.cos(phi), math.sin(phi)
+        return np.array([[c, 0.0, s_], [0.0, 1.0, 0.0], [-s_, 0.0, c]])
+
+    def rotors_in_px4_frame(self) -> list[tuple[list[float], list[float]]]:
+        import numpy as np
+        R = self.hover_rotation()
+        out = []
+        for r in self.rotors:
+            out.append(((R @ np.array(r.pos, float)).tolist(), (R @ np.array(_unit(r.axis), float)).tolist()))
+        return out
 
     # ------------------------------------------------------------------ io
     def to_dict(self) -> dict[str, Any]:
@@ -128,15 +146,17 @@ class Airframe:
             "CA_AIRFRAME": 0,            # multirotor
             "CA_ROTOR_COUNT": len(self.rotors),
         }
-        for i, r in enumerate(self.rotors):
-            ax = _unit(r.axis)
-            p[f"CA_ROTOR{i}_PX"] = round(r.pos[0], 4)
-            p[f"CA_ROTOR{i}_PY"] = round(r.pos[1], 4)
-            p[f"CA_ROTOR{i}_PZ"] = round(r.pos[2], 4)
+        for i, (r, (pos, ax)) in enumerate(zip(self.rotors, self.rotors_in_px4_frame())):
+            p[f"CA_ROTOR{i}_PX"] = round(pos[0], 4)
+            p[f"CA_ROTOR{i}_PY"] = round(pos[1], 4)
+            p[f"CA_ROTOR{i}_PZ"] = round(pos[2], 4)
             p[f"CA_ROTOR{i}_AX"] = round(ax[0], 4)
             p[f"CA_ROTOR{i}_AY"] = round(ax[1], 4)
             p[f"CA_ROTOR{i}_AZ"] = round(ax[2], 4)
             p[f"CA_ROTOR{i}_KM"] = round(r.km, 4)
+        # The flight controller is mounted in the structural frame; tell PX4 its board is pitched nose-up by
+        # hover_pitch so sensor data lands in the hover frame the CA_ROTOR geometry above is expressed in.
+        p["SENS_BOARD_Y_OFF"] = round(float(self.hover_pitch_deg), 2)
         # Output function mapping: HIL_ACT_FUNCn (SITL simulator_mavlink and HITL both use pwm_out_sim)
         for n in range(1, 17):
             p[f"HIL_ACT_FUNC{n}"] = 101 + (n - 1) if n <= len(self.rotors) else 0
@@ -171,12 +191,14 @@ class Airframe:
         if n == 0:
             return {"ok": False, "problems": ["no rotors"], "shares": []}
         rows = []
-        for r in self.rotors:
-            p = np.array(r.pos, float)
-            ax = np.array(_unit(r.axis), float)
+        for r, (pos, axis) in zip(self.rotors, self.rotors_in_px4_frame()):   # allocation happens in PX4's (hover) frame
+            p = np.array(pos, float)
+            ax = np.array(axis, float)
             rows.append(np.concatenate([np.cross(p, ax) - r.km * ax, ax]))
         E = np.array(rows).T                              # 6 x n, unit thrust coefficient (CT cancels)
-        u = np.linalg.pinv(E) @ np.array([0, 0, 0, 0, 0, -1.0])
+        sp = np.array([0, 0, 0, 0, 0, -1.0])
+        u = np.linalg.pinv(E) @ sp
+        resid = E @ u - sp                                # least-squares residual: what no motor mix can cancel
         umax = float(u.max()) if u.max() > 1e-9 else 1.0
         shares = (u / umax).tolist()
         neg = [i + 1 for i, v in enumerate(shares) if v < -1e-6]
@@ -188,14 +210,31 @@ class Airframe:
         util = [t / r.max_thrust if r.max_thrust > 0 else float("inf") for t, r in zip(hover_thrust, self.rotors)]
         over = [i + 1 for i, x in enumerate(util) if x > 0.85]
         problems = []
+        force_resid = float(np.abs(resid[3:5]).max())
+        yaw_resid = float(abs(resid[2]))
+        rp_resid = float(np.abs(resid[:2]).max())
+        unbalanced = force_resid > 1e-3 or rp_resid > 1e-3
+        if unbalanced:
+            problems.append(f"no motor mix gives zero net force and roll/pitch torque at {self.hover_pitch_deg:g}° nose-up "
+                            f"(residual force {force_resid:.2f} per unit of lift): PX4 will have to lean away from its level "
+                            f"attitude to hover. Set the hover pitch so all thrust axes are vertical in hover (usually equal "
+                            f"to the rotor tilt), or tilt rotors in opposing pairs.")
+        if yaw_resid > 2e-3:
+            problems.append(f"yaw torque cannot be cancelled: every rotor spins the same way and the axes are parallel, so "
+                            f"a residual yaw torque of {yaw_resid:.3f} per unit of lift remains and there is no yaw authority. "
+                            f"Alternate spin directions, or cant rotors left/right in opposing pairs so thrust vectors can yaw.")
         if neg:
-            problems.append(f"PX4's allocator wants negative thrust on motor(s) {neg} to hover with zero torque; "
-                            f"it will clip them to zero and the vehicle will not lift off. Rebalance spin directions "
-                            f"(mix CW/CCW on each side) or move the CG relative to the rotors.")
+            hint = ("Rebalance spin directions (mix CW/CCW on each side) or move the CG relative to the rotors."
+                    if all(abs(_unit(r.axis)[2]) > 0.98 for r in self.rotors) else
+                    "With tilted rotors, set the hover pitch so the thrust axes are vertical in hover, and tilt all rotors "
+                    "the same way; any rotor pointing a different way must be cancelled by another.")
+            problems.append(f"PX4's allocator wants negative thrust on motor(s) {neg} to hover with zero torque "
+                            f"(at {self.hover_pitch_deg:g}° nose-up); it will clip them to zero and the vehicle will not lift off. {hint}")
         if over:
             problems.append(f"motor(s) {over} above 85% of max thrust just to hover; no control margin")
-        return {"ok": not neg and not over, "problems": problems, "shares": shares, "hover_thrust": hover_thrust,
-                "hover_utilisation": util, "negative": neg}
+        return {"ok": not neg and not over and not unbalanced and yaw_resid <= 2e-3, "problems": problems, "shares": shares,
+                "hover_thrust": hover_thrust, "hover_utilisation": util, "negative": neg,
+                "residual_force": resid[3:].tolist(), "residual_torque": resid[:3].tolist()}
 
     # ---------------------------------------------------------- helpers
     def estimate_inertia(self, motor_mass: float = 0.06, body_fraction: float = 0.6) -> list[float]:
