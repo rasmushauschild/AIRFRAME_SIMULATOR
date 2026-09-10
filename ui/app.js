@@ -31,7 +31,9 @@ $$('.tabs button').forEach(b => b.addEventListener('click', () => {
   $$('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
   if (b.dataset.tab === 'px4') loadExport();
   if (b.dataset.tab === 'params') ensureParams();
+  if (b.dataset.tab === 'connect') refreshConnection();
 }));
+function openTab(name) { $$('.tabs button').find(b => b.dataset.tab === name)?.click(); }
 
 // ============================================================ airframe editing
 function pushAirframe(immediate = false) {
@@ -343,9 +345,16 @@ $('#motor-enable').addEventListener('change', (e) => {
 let homeFilled = false;
 function applyStatus(s) {
   status = s;
-  $('#st-mode').textContent = s.mode.toUpperCase();
-  $('#st-conn').textContent = s.connected ? (s.mode === 'hitl' ? s.address : 'PX4 connected') : (s.mode === 'sitl' ? (s.px4_running ? 'PX4 starting…' : 'waiting for PX4 on :4560') : 'no data from ' + s.address);
+  const none = !s.conn_mode;
+  $('#st-mode').textContent = none ? 'No link' : (s.mode === 'hitl' ? 'Pixhawk' : 'SITL');
+  $('#st-conn').textContent = none ? (s.conn_error ? 'failed — open Connect' : 'open Connect')
+    : s.connected ? (s.mode === 'hitl' ? s.address.replace('/dev/', '') + (s.hil_enabled ? '' : ' · HITL off') : 'PX4 connected')
+    : (s.mode === 'sitl' ? (s.px4_running ? 'PX4 starting…' : 'waiting for PX4') : 'no data from ' + s.address.replace('/dev/', ''));
   $('#st-link .dot').classList.toggle('on', s.connected);
+  const det = $('#st-detected');
+  const showDet = s.mode !== 'hitl' && s.px4_ports && s.px4_ports.length > 0;
+  det.classList.toggle('hidden', !showDet); det.classList.toggle('blink', showDet);
+  if (showDet) det.textContent = `Pixhawk on ${s.px4_ports[0].replace('/dev/', '')} · connect`;
   $('#st-armed').textContent = s.armed ? 'Armed' : 'Disarmed';
   $('#st-armed').classList.toggle('armed', s.armed);
   $('#st-flightmode').textContent = s.connected ? s.mode_name + (s.mode === 'hitl' && !s.hil_enabled ? ' · HIL OFF (set SYS_HITL=1)' : '') : '—';
@@ -429,3 +438,60 @@ api('/api/log?since=0').then(lines => lines.forEach(l => logLine(l[1]))).catch((
   logMove.begin = () => { logMove.startH = log.getBoundingClientRect().height; };
   drag($('#resize-log'), 'y', logMove);
 })();
+
+
+// ============================================================ connection / HITL
+let connTimer = null;
+$('#st-link').addEventListener('click', () => openTab('connect'));
+$('#st-detected').addEventListener('click', async () => { openTab('connect'); await connectHitl(); });
+$('#conn-sitl').addEventListener('click', async () => { await connCall('/api/connection/connect', { mode: 'sitl' }); });
+$('#conn-rescan').addEventListener('click', refreshConnection);
+$('#conn-disconnect').addEventListener('click', async () => { await connCall('/api/connection/disconnect', {}); });
+async function connectHitl(serial) {
+  await connCall('/api/connection/connect', { mode: 'hitl', serial, baud: +$('#conn-baud').value || 921600 });
+}
+async function connCall(path, body) {
+  $('#conn-error').textContent = '';
+  $('#conn-current').innerHTML = '<span class="muted">Working…</span>';
+  try { await api(path, body); paramsLoaded = false; } catch (e) { $('#conn-error').textContent = e.message; }
+  await refreshConnection();
+}
+async function refreshConnection() {
+  clearTimeout(connTimer);
+  if (!$('#tab-connect').classList.contains('active')) return;
+  let c;
+  try { c = await api('/api/connection'); } catch (e) { $('#conn-error').textContent = e.message; return; }
+  const L = c.link;
+  const cur = $('#conn-current');
+  if (!c.mode) cur.innerHTML = '<div class="conn-row"><div><b>Not connected</b><div class="hint">Pick PX4 SITL or a Pixhawk below.</div></div></div>';
+  else if (c.mode === 'sitl') cur.innerHTML = `<div class="conn-row"><div><b>PX4 SITL</b> <span class="${L.connected ? 'ok' : 'muted'}">${L.connected ? '● connected' : (c.px4_running ? '○ starting…' : '○ waiting for PX4')}</span><div class="hint">instance ${c.px4_instance ?? 0} · simulator tcp ${L.address} · control ${L.ctl_address}</div></div></div>`;
+  else cur.innerHTML = `<div class="conn-row"><div><b>Pixhawk</b> <span class="${L.connected ? 'ok' : 'muted'}">${L.connected ? '● link up' : '○ no data yet'}</span><div class="dev">${c.serial} @ ${c.baud}</div><div class="hint">QGroundControl: connect over UDP ${c.qgc}</div></div></div>`;
+  $('#conn-error').textContent = c.error || '';
+  $('#conn-sitl-card').classList.toggle('current', c.mode === 'sitl');
+  const ports = c.ports || [];
+  $('#conn-ports').innerHTML = ports.length ? ports.map(p => `
+    <div class="card ${c.mode === 'hitl' && c.serial === p.device ? 'current' : ''}"><div class="conn-row">
+      <div><b>${p.likely_px4 ? 'Pixhawk' : 'Serial device'}</b> <span class="hint">${p.description || ''}</span><div class="dev">${p.device}</div></div>
+      <button class="pill small ${p.likely_px4 ? 'primary' : ''}" data-dev="${p.device}">${c.mode === 'hitl' && c.serial === p.device ? 'Reconnect' : 'Connect'}</button>
+    </div></div>`).join('')
+    : '<div class="card"><div class="conn-row"><div><b>No USB flight controller found</b><div class="hint">Plug the Pixhawk in over USB and click Rescan. If QGroundControl is open, close it or disable its serial auto-connect.</div></div></div></div>';
+  $$('#conn-ports button[data-dev]').forEach(b => b.addEventListener('click', () => connectHitl(b.dataset.dev)));
+  const steps = c.checklist || [];
+  $('#conn-checklist').innerHTML = steps.map(s => `<div class="check ${s.ok ? 'ok' : ''}"><div class="mark">${s.ok ? '✓' : ''}</div>
+    <div class="body"><div class="label">${s.label}</div>${s.detail ? `<div class="detail">${s.detail}</div>` : ''}</div>
+    ${s.busy ? '<span class="pill small">Working…</span>' : ''}
+    ${s.action === 'enable_hitl' ? '<button class="pill small primary" data-act="enable_hitl">Enable HITL</button>' : ''}
+    ${s.action === 'build_firmware' ? '<button class="pill small primary" data-act="build_firmware">Build firmware</button>' : ''}
+    ${s.action === 'upload_firmware' ? '<button class="pill small primary" data-act="upload_firmware">Flash firmware</button>' : ''}
+    ${s.action === 'push' ? '<button class="pill small primary" data-act="push">Push geometry</button>' : ''}</div>`).join('');
+  $$('#conn-checklist button[data-act]').forEach(b => b.addEventListener('click', async () => {
+    if (b.dataset.act === 'enable_hitl') { b.textContent = 'Rebooting…'; await connCall('/api/connection/enable_hitl', {}); }
+    if (b.dataset.act === 'push') { await pushToPX4($('#geo-push-status'), true); await refreshConnection(); }
+    if (b.dataset.act === 'build_firmware') { b.textContent = 'Building…'; await connCall('/api/firmware/build', {}); }
+    if (b.dataset.act === 'upload_firmware') {
+      if (!confirm('Flash the HITL-capable firmware to the board now? It reboots and reconnects when done. Parameters are kept.')) return;
+      b.textContent = 'Flashing…'; await connCall('/api/firmware/upload', {});
+    }
+  }));
+  connTimer = setTimeout(refreshConnection, 2000);
+}

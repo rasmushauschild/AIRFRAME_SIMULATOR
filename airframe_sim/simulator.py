@@ -20,7 +20,7 @@ from .sensors import SensorSuite, Home, SensorNoise
 
 
 class Simulator:
-    def __init__(self, airframe: Airframe, link: PX4Link, sensor_rate: float = 250.0, physics_substeps: int = 4,
+    def __init__(self, airframe: Airframe, link: PX4Link | None = None, sensor_rate: float = 250.0, physics_substeps: int = 4,
                  gps_rate: float = 10.0, speed: float = 1.0, lockstep: bool | None = None,
                  home: Home | None = None, log: Callable[[str], None] | None = None):
         self.link = link
@@ -34,7 +34,7 @@ class Simulator:
         self.gps_every = max(1, int(round(sensor_rate / gps_rate)))
         self.state_every = max(1, int(round(sensor_rate / 50.0)))
         self.speed = speed                     # 1.0 = real time, 0 = as fast as PX4 allows (SITL only)
-        self.lockstep = (link.mode == "sitl") if lockstep is None else lockstep
+        self.lockstep = (link is not None and link.mode == "sitl") if lockstep is None else bool(lockstep)
         self.time_usec = 0
         self.paused = False
         self.running = False
@@ -42,6 +42,8 @@ class Simulator:
         self.lockstep_timeouts = 0
         self.real_time_factor = 0.0
         self.motor_override: list[float] | None = None   # manual motor test from the UI
+        self.link_seq = 0
+        self._last_send_err = 0.0
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
 
@@ -65,6 +67,16 @@ class Simulator:
             if not keep_state:
                 self.sim.reset()
 
+    def set_link(self, link, lockstep: bool) -> None:
+        """Swap the PX4 link at runtime (SITL <-> HITL). None pauses the sensor stream."""
+        with self.lock:
+            self.link = link
+            self.lockstep = lockstep
+            self.link_seq += 1
+            self.lockstep_timeouts = 0
+            if link is not None:
+                self.sim.reset()
+
     def set_wind(self, north: float, east: float, down: float = 0.0) -> None:
         with self.lock:
             self.sim.wind_ned = np.array([north, east, down], dtype=float)
@@ -78,19 +90,19 @@ class Simulator:
         sim_start = self.time_usec
         last_hb = 0.0
         rtf_t0, rtf_sim0 = time.perf_counter(), self.time_usec
-        self.log(f"[sim] loop started: {self.sensor_rate:.0f} Hz sensors, physics {self.sensor_rate * self.substeps:.0f} Hz, "
-                 f"lockstep={'on' if self.lockstep else 'off'}, mode={self.link.mode}")
+        self.log(f"[sim] loop started: {self.sensor_rate:.0f} Hz sensors, physics {self.sensor_rate * self.substeps:.0f} Hz")
         while not self._stop.is_set():
             now = time.perf_counter()
-            if now - last_hb > 1.0:
+            link = self.link
+            if link is not None and now - last_hb > 1.0:
                 try:
-                    self.link.send_heartbeat()
+                    link.send_heartbeat()
                 except Exception:
                     pass
                 last_hb = now
 
             # SITL: nothing to do until PX4 has connected and sent its first heartbeat.
-            if self.paused or (self.link.mode == "sitl" and not self.link.connected):
+            if link is None or self.paused or (link.mode == "sitl" and not link.connected):
                 time.sleep(0.02)
                 wall_start = time.perf_counter()
                 sim_start = self.time_usec
@@ -98,7 +110,7 @@ class Simulator:
 
             # 1. actuators -> physics
             with self.lock:
-                cmd = self.motor_override if self.motor_override is not None else self.link.actuators
+                cmd = self.motor_override if self.motor_override is not None else link.actuators
                 self.sim.set_motor_commands(cmd)
                 for _ in range(self.substeps):
                     self.sim.step(sub_dt)
@@ -110,21 +122,23 @@ class Simulator:
             self.step_count += 1
 
             # 2. sensors -> PX4
-            seq_before = self.link.actuator_seq
+            seq_before = link.actuator_seq
             try:
                 if gps is not None:
-                    self.link.send_hil_gps(gps)
+                    link.send_hil_gps(gps)
                 if state is not None:
-                    self.link.send_hil_state_quaternion(state)
-                self.link.send_hil_sensor(sensor)
+                    link.send_hil_state_quaternion(state)
+                link.send_hil_sensor(sensor)
             except Exception as e:
-                self.log(f"[sim] send failed: {e}")
+                if time.time() - self._last_send_err > 3.0:
+                    self.log(f"[sim] send failed: {e}")
+                    self._last_send_err = time.time()
                 time.sleep(0.1)
                 continue
 
             # 3. lockstep: wait for PX4 to consume it
             if self.lockstep:
-                if not self.link.wait_for_actuators(seq_before, timeout=0.1):
+                if not link.wait_for_actuators(seq_before, timeout=0.1):
                     self.lockstep_timeouts += 1
 
             # 4. pacing

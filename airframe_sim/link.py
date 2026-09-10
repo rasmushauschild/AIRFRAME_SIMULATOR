@@ -82,6 +82,7 @@ class PX4Link:
         self._param_set_result: dict[str, dict] = {}
 
         self.statustext = deque(maxlen=200)
+        self.firmware: dict = {}      # from AUTOPILOT_VERSION
         self.rx_count = 0
         self.last_rx_time = 0.0
         self._qgc_sock = None
@@ -171,6 +172,8 @@ class PX4Link:
             try:
                 msg = conn.recv_match(blocking=True, timeout=0.05)
             except Exception as e:  # serial unplugged etc.
+                if self._stop.is_set():
+                    break
                 self.log(f"[link] read error on {name}: {e}")
                 time.sleep(0.5)
                 continue
@@ -214,6 +217,14 @@ class PX4Link:
                     self.mav_type = msg.type
             elif t == "PARAM_VALUE":
                 self._handle_param_value(msg)
+            elif t == "AUTOPILOT_VERSION":
+                v = msg.flight_sw_version
+                ver = f"{(v >> 24) & 0xFF}.{(v >> 16) & 0xFF}.{(v >> 8) & 0xFF}"
+                typ = {0: "dev", 64: "alpha", 128: "beta", 192: "rc", 255: "release"}.get(v & 0xFF, "")
+                gh = bytes(msg.flight_custom_version).hex()[:8]
+                self.firmware = {"version": f"{ver} {typ}".strip(), "git": gh, "board": msg.board_version,
+                                 "vendor_id": msg.vendor_id, "product_id": msg.product_id}
+                self.log(f"[link] firmware PX4 v{ver} {typ} ({gh})")
             elif t == "STATUSTEXT":
                 text = msg.text if isinstance(msg.text, str) else msg.text.decode(errors="ignore")
                 self.statustext.append((time.time(), msg.severity, text))
@@ -348,6 +359,9 @@ class PX4Link:
         return results
 
     # --------------------------------------------------------------- commands
+    def request_autopilot_version(self) -> None:
+        self.send_command_long(mavlink.MAV_CMD_REQUEST_MESSAGE, float(mavlink.MAVLINK_MSG_ID_AUTOPILOT_VERSION))
+
     def preflight_storage(self, save: bool = True) -> None:
         """MAV_CMD_PREFLIGHT_STORAGE: 1 = write params to storage."""
         self.send_command_long(mavlink.MAV_CMD_PREFLIGHT_STORAGE, 1.0 if save else 0.0)

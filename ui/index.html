@@ -25,7 +25,8 @@
         <button class="pill theme-btn" id="btn-theme" title="Toggle dark mode">◐</button>
       </div>
       <div class="status">
-        <span class="pill st" id="st-link"><i class="dot"></i><b id="st-mode">—</b>&nbsp;<span id="st-conn">not connected</span></span>
+        <button class="pill st" id="st-link" title="Open the Connect tab"><i class="dot"></i><b id="st-mode">—</b>&nbsp;<span id="st-conn">not connected</span></button>
+        <button class="pill st detected hidden" id="st-detected" title="A flight controller is plugged in — click to connect">Pixhawk detected · connect</button>
         <span class="pill st" id="st-armed">Disarmed</span>
         <span class="pill st" id="st-flightmode">—</span>
         <span class="pill st num" id="st-time">0.0 s</span>
@@ -58,6 +59,7 @@
       <button data-tab="px4">PX4 export</button>
       <button data-tab="params">Parameters</button>
       <button data-tab="sim">Flight</button>
+      <button data-tab="connect">Connect</button>
     </nav>
     <div class="panel-body">
 
@@ -185,6 +187,37 @@
 
       <h3>Live rotors</h3>
       <div id="rotor-live"></div>
+    </section>
+
+    <!-- ============================ CONNECT ============================ -->
+    <section id="tab-connect" class="tab">
+      <h3>Flight controller</h3>
+      <div id="conn-current" class="card"></div>
+      <div id="conn-error" class="problems"></div>
+
+      <h3>Connect to</h3>
+      <div class="card" id="conn-sitl-card">
+        <div class="conn-row">
+          <div><b>PX4 SITL</b><div class="hint">Simulated flight controller on this Mac, started for you.</div></div>
+          <button class="pill small" id="conn-sitl">Use SITL</button>
+        </div>
+      </div>
+      <div id="conn-ports"></div>
+      <div class="row tight">
+        <button class="pill small" id="conn-rescan">Rescan USB</button>
+        <label class="row">Baud <input id="conn-baud" type="number" value="921600" style="width:96px"></label>
+        <button class="pill small" id="conn-disconnect">Disconnect</button>
+      </div>
+
+      <h3>HITL checklist</h3>
+      <div id="conn-checklist" class="card"></div>
+      <p class="help" id="conn-help">
+        <b>How HITL works here.</b> The Pixhawk runs its normal firmware. The simulator feeds it IMU, magnetometer,
+        barometer and GPS over USB and takes its motor outputs back into the physics. Steps: plug the board in over
+        USB, click <i>Connect</i>, then <i>Enable HITL</i> if the checklist asks for it (sets <code>SYS_HITL = 1</code>, saves and reboots),
+        then <i>Push geometry</i>. QGroundControl keeps working through UDP 14550, but disable its
+        <i>serial</i> auto-connect (Application Settings → General → AutoConnect) or it will grab the USB port first.
+      </p>
     </section>
     </div>
   </aside>

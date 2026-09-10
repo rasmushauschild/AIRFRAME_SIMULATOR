@@ -62,18 +62,26 @@ cd ~/PX4-Autopilot && PX4_SIM_MODEL=none_iris ./build/px4_sitl_default/bin/px4 -
 
 ## Run: HITL (real Pixhawk)
 
-1. Flash normal PX4 firmware, pick any multirotor airframe in QGC, set `SYS_HITL = 1`, reboot.
-2. In QGroundControl, **disable serial auto-connect** (Application Settings → General → AutoConnect), otherwise QGC
-   grabs the USB port. The simulator forwards the vehicle's MAVLink to UDP 14550, so QGC still sees the vehicle.
-3. Plug the Pixhawk in and run:
+The easy way: plug the Pixhawk in over USB and open the **Connect** tab (or click the blue "Pixhawk detected" pill).
+It lists the board, connects with one click, and walks a checklist:
 
-```bash
-.venv/bin/python -m airframe_sim --mode hitl              # first /dev/cu.usbmodem* is used
-.venv/bin/python -m airframe_sim --mode hitl --serial /dev/cu.usbmodem01 --qgc 127.0.0.1:14550
-```
+1. **Pixhawk detected on USB** – found by USB vendor/product.
+2. **Serial link up / Parameters downloaded** – automatic after Connect.
+3. **Firmware supports HITL** – PX4 only includes the HIL output driver (`pwm_out_sim`) when the firmware is built
+   with `CONFIG_MODULES_SIMULATION_PWM_OUT_SIM=y`, and the standard release firmware for most boards (fmu-v6x
+   included) leaves it out. If the board lacks it, the checklist offers **Build firmware** (runs
+   `scripts/build_hitl_firmware.sh` for the detected board) and then **Flash firmware**. Building needs the ARM
+   toolchain once: `brew tap osx-cross/arm && brew install arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13`.
+   Parameters survive the flash.
+4. **HITL enabled on the board** – **Enable HITL** sets `SYS_HITL = 1`, saves, reboots; the link reconnects itself.
+5. **Board is in HIL mode and streaming** – the heartbeat carries the HIL flag and actuator outputs arrive.
+6. **Airframe geometry pushed** – **Push geometry** writes the CA_ROTOR parameters and the HIL_ACT_FUNC mapping.
 
-The status bar shows `HIL OFF` until `SYS_HITL=1` is active on the board. Parameter descriptions come from the local
-PX4 build if present; otherwise use *Parameters → fetch descriptions* to download them from the board over MAVLink FTP.
+From the command line: `--mode auto` picks the Pixhawk if one is plugged in, otherwise SITL;
+`--mode hitl --serial /dev/cu.usbmodem01` forces a port. `scripts/start.command` is a double-clickable launcher.
+
+QGroundControl keeps working during HITL: the simulator forwards the vehicle's MAVLink to UDP 14550. Disable QGC's
+**serial** auto-connect (Application Settings → General → AutoConnect) or QGC grabs the USB port before the simulator.
 
 HITL runs in real time (no lockstep). Keep `--rate` at 250 Hz or below on USB.
 

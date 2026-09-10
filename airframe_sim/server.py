@@ -40,24 +40,51 @@ def mode_name(custom_mode: int) -> str:
     return name
 
 
+class _NoLink:
+    """Stand-in while no PX4 link exists so the endpoints degrade gracefully."""
+    mode = "none"
+    connected = False
+    ctl_connected = False
+    params: dict = {}
+    param_count = 0
+
+    def status(self):
+        return {"mode": "none", "address": "", "connected": False, "ctl_connected": False, "armed": False,
+                "hil_enabled": False, "custom_mode": 0, "rx_count": 0, "param_count": 0, "params_loaded": 0,
+                "actuator_seq": 0, "qgc_proxy": None, "target_system": 0, "ctl_address": ""}
+
+    def __getattr__(self, name):
+        def noop(*a, **k):
+            return {"ok": False, "error": "PX4 not connected"}
+        return noop
+
+
 class AppState:
-    def __init__(self, simulator, link, args, log_buffer: deque, log):
+    def __init__(self, simulator, conn, args, log_buffer: deque, log):
         self.simulator = simulator
-        self.link = link
+        self.conn = conn                     # ConnectionManager
         self.args = args
         self.log_buffer = log_buffer
         self.log = log
         self.meta: dict[str, dict] = {}
         self.meta_source = ""
-        self.px4_process = None
         self.export_log: deque = deque(maxlen=500)
+
+    @property
+    def link(self):
+        return self.conn.link if self.conn.link is not None else _NoLink()
 
 
 def build_app(state: AppState) -> FastAPI:
     app = FastAPI(title="AIRFRAME_SIMULATOR")
     app.mount("/static", StaticFiles(directory=str(UI_DIR)), name="static")
     sim = state.simulator
-    link = state.link
+
+    class _LinkProxy:
+        def __getattr__(self, name):
+            return getattr(state.link, name)
+
+    link = _LinkProxy()   # always resolves to the current link
 
     # -------------------------------------------------------------- pages
     @app.get("/")
@@ -68,7 +95,10 @@ def build_app(state: AppState) -> FastAPI:
     def status_dict() -> dict:
         s = link.status()
         s["mode_name"] = mode_name(s["custom_mode"])
-        s["px4_running"] = state.px4_process is not None and state.px4_process.poll() is None
+        s["px4_running"] = state.conn.px4_running()
+        s["conn_mode"] = state.conn.mode
+        s["conn_error"] = state.conn.error
+        s["px4_ports"] = [p["device"] for p in state.conn.list_ports_cached() if p["likely_px4"]]
         s["meta_loaded"] = len(state.meta)
         s["meta_source"] = state.meta_source
         s["home"] = {"lat": sim.sensors.home.lat, "lon": sim.sensors.home.lon, "alt": sim.sensors.home.alt}
@@ -140,6 +170,44 @@ def build_app(state: AppState) -> FastAPI:
         af.inertia = af.estimate_inertia()
         sim.set_airframe(af)
         return {"ok": True, "inertia": af.inertia}
+
+    # ------------------------------------------------------------ connection
+    @app.get("/api/connection")
+    async def get_connection():
+        st = state.conn.status()
+        st["checklist"] = state.conn.checklist(export_params() if state.conn.mode == "hitl" else None)
+        return st
+
+    @app.post("/api/connection/connect")
+    async def connect(body: dict):
+        mode = body.get("mode", "sitl")
+        if mode == "hitl":
+            r = await run_in_threadpool(state.conn.connect_hitl, body.get("serial"), body.get("baud"))
+        else:
+            r = await run_in_threadpool(state.conn.connect_sitl, body.get("launch"))
+        return r
+
+    @app.post("/api/connection/disconnect")
+    async def disconnect():
+        return await run_in_threadpool(state.conn.disconnect)
+
+    @app.post("/api/connection/enable_hitl")
+    async def enable_hitl():
+        return await run_in_threadpool(state.conn.enable_hitl)
+
+    @app.post("/api/firmware/build")
+    async def firmware_build(body: dict | None = None):
+        return await run_in_threadpool(state.conn.build_firmware, (body or {}).get("target"))
+
+    @app.post("/api/firmware/upload")
+    async def firmware_upload(body: dict | None = None):
+        return await run_in_threadpool(state.conn.upload_firmware, (body or {}).get("target"))
+
+    @app.get("/api/firmware")
+    async def firmware_status():
+        b = state.conn.detected_board()
+        return {"job": state.conn.firmware_job.status(), "board": b, "toolchain": state.conn.toolchain_present(),
+                "built": state.conn.firmware_file(b["target"])}
 
     # ------------------------------------------------------------ PX4 export
     def export_params() -> dict[str, float | int]:
