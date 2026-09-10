@@ -43,6 +43,7 @@ function pushAirframe(immediate = false) {
       showProblems(res.problems);
       showHover(res.hover);
       markDirty();
+      loadExport();
     } catch (e) { logLine('[ui] airframe rejected: ' + e.message); }
   };
   if (immediate) doPush(); else pushTimer = setTimeout(doPush, 120);
@@ -247,17 +248,13 @@ $('#rotor-apply-all').addEventListener('click', () => {
 
 // ============================================================ PX4 export
 async function loadExport() {
-  const r = await api('/api/px4/export');
+  let r;
+  try { r = await api('/api/px4/export'); } catch (e) { return; }
+  lastExport = r;
   renderOverrides(r);
-  const tb = $('#px4-export-table tbody');
-  tb.innerHTML = Object.entries(r.params).filter(([k]) => !(r.overrides && k in r.overrides)).map(([k, v]) => {
-    const cur = r.current[k];
-    const same = cur !== null && cur !== undefined && Math.abs(+cur - +v) < 1e-4;
-    const f = (x) => (typeof x === 'number' && !Number.isInteger(x)) ? +x.toFixed(4) : x;
-    return `<tr><td class="mono">${k}</td><td class="num">${f(v)}</td><td class="${cur == null ? 'muted' : same ? 'ok' : 'diff'}">${cur == null ? '—' : f(cur)}</td><td>${cur == null ? '' : same ? '✓' : '≠'}</td></tr>`;
-  }).join('');
   $('#px4-export-status').innerHTML = r.problems.length ? `<div class="problems">⚠ ${r.problems.join('<br>⚠ ')}</div>` : '';
 }
+let lastExport = null;
 $('#px4-refresh').addEventListener('click', loadExport);
 async function pushToPX4(statusEl, short = false) {
   statusEl.innerHTML = '<span class="muted">Pushing…</span>';
@@ -285,7 +282,6 @@ function updateFooter() {
   armBtn.title = status.armed ? 'Force disarm immediately (motors stop, even in the air)' : 'Arm the vehicle';
   armBtn.classList.toggle('armed', !!status.armed);
   armBtn.disabled = !status.ctl_connected;
-  $('#btn-recover').disabled = !status.ctl_connected;
   const upd = $('#btn-update');
   upd.disabled = !status.ctl_connected || !!status.armed;
   upd.title = status.armed ? 'Disarm first: PX4 rebuilds its allocation when these parameters change' :
@@ -298,20 +294,42 @@ $('#btn-arm').addEventListener('click', async () => {
 
 // ============================================================ edited parameters (overrides saved with the airframe)
 function renderOverrides(r) {
-  const ov = (r && r.overrides) || airframe.px4_overrides || {};
-  airframe.px4_overrides = ov;
+  r = r || lastExport;
+  const ov = (r && r.overrides) || (airframe && airframe.px4_overrides) || {};
+  if (airframe) airframe.px4_overrides = ov;
   const el = $('#overrides');
-  const names = Object.keys(ov).sort();
-  if (!names.length) { el.innerHTML = '<div class="hint">No hand-edited parameters yet. Edit any parameter below and it appears here.</div>'; return; }
-  el.innerHTML = names.map(n => {
-    const m = meta[n] || {}; const cur = params[n] ? params[n].value : null;
-    const same = cur != null && Math.abs(+cur - +ov[n]) < 1e-5;
-    return `<div class="ov-row"><span class="pname">${n}</span><input type="number" step="any" value="${ov[n]}" data-n="${n}">
-      <span class="ov-cur ${cur == null ? 'muted' : same ? 'ok' : 'warn'}" title="value on the vehicle">${cur == null ? '—' : (Number.isInteger(cur) ? cur : +cur.toPrecision(6))}${m.unit ? ' ' + m.unit : ''}</span>
-      <span class="pdesc" title="${(m.short || '').replace(/"/g, '&quot;')}">${m.short || ''}</span><button class="del" data-n="${n}" title="forget this edit">✕</button></div>`;
-  }).join('');
+  const f = (x) => (typeof x === 'number' && !Number.isInteger(x)) ? +x.toFixed(4) : x;
+  const cur = (r && r.current) || {};
+  const same = (k, v) => cur[k] != null && Math.abs(+cur[k] - +v) < 1e-4;
+  const vehicleCell = (k, v) => `<span class="ov-cur ${cur[k] == null ? 'muted' : same(k, v) ? 'ok' : 'warn'}" title="value on the vehicle">${cur[k] == null ? '—' : f(cur[k])}</span>`;
+  let html = '';
+  // hand-edited, editable
+  Object.keys(ov).sort().forEach(n => {
+    const m = meta[n] || {};
+    html += `<div class="ov-row"><span class="pname">${n}</span><input type="number" step="any" value="${ov[n]}" data-n="${n}">${vehicleCell(n, ov[n])}<span class="pdesc" title="${(m.short || '').replace(/"/g, '&quot;')}">${m.short || ''}</span><button class="del" data-n="${n}" title="forget this edit">✕</button></div>`;
+  });
+  // derived from the geometry, read-only, grouped per rotor
+  if (r && r.params) {
+    const P = r.params, keys = r.geometry_keys || [];
+    const rotors = {}; const rest = [];
+    keys.forEach(k => { const m = k.match(/^CA_ROTOR(\d+)_(PX|PY|PZ|AX|AY|AZ|KM)$/); if (m) (rotors[m[1]] = rotors[m[1]] || {})[m[2]] = P[k]; else if (!/^(HIL_ACT_FUNC|PWM_MAIN_FUNC)\d+$/.test(k)) rest.push(k); });
+    const diff = (prefix) => keys.filter(k => k.startsWith(prefix)).some(k => !same(k, P[k]));
+    if (html) html += '<div class="ov-sep"></div>';
+    html += '<div class="hint" style="margin:2px 0 4px">From the geometry above · read-only</div>';
+    rest.forEach(k => { html += `<div class="ov-row ro"><span class="pname">${k}</span><span class="ov-val">${f(P[k])}</span>${vehicleCell(k, P[k])}<span class="pdesc">${(meta[k] || {}).short || ''}</span><span></span></div>`; });
+    Object.keys(rotors).sort((a, b) => a - b).forEach(i => {
+      const R = rotors[i]; const d = diff(`CA_ROTOR${i}_`);
+      html += `<div class="ov-row ro rotor"><span class="pname">CA_ROTOR${i}_*</span><span class="ov-val rot">P ${f(R.PX)} ${f(R.PY)} ${f(R.PZ)} · A ${f(R.AX)} ${f(R.AY)} ${f(R.AZ)} · KM ${f(R.KM)}</span><span class="ov-cur ${d ? 'warn' : 'ok'}">${d ? '≠ vehicle' : '✓'}</span><span class="pdesc">motor ${+i + 1}</span><span></span></div>`;
+    });
+    const funcs = keys.filter(k => /^(HIL_ACT_FUNC|PWM_MAIN_FUNC)\d+$/.test(k)).sort((a, b) => parseInt(a.match(/\d+$/)[0]) - parseInt(b.match(/\d+$/)[0]));
+    if (funcs.length) {
+      const on = funcs.filter(k => P[k] > 0), d = funcs.some(k => !same(k, P[k]));
+      html += `<div class="ov-row ro"><span class="pname">${funcs[0].replace(/\d+$/, '')}1‑${funcs.length}</span><span class="ov-val rot">${on.map(k => P[k]).join(', ')}${on.length < funcs.length ? ', rest 0' : ''}</span><span class="ov-cur ${d ? 'warn' : 'ok'}">${d ? '≠ vehicle' : '✓'}</span><span class="pdesc">output → motor mapping</span><span></span></div>`;
+    }
+  }
+  el.innerHTML = html || '<div class="hint">Nothing yet. Edit any parameter below and it appears here.</div>';
   $$('#overrides input').forEach(inp => inp.addEventListener('change', () => setParamValue(inp.dataset.n, parseFloat(inp.value))));
-  $$('#overrides .del').forEach(b => b.addEventListener('click', async () => { await api('/api/airframe/override_remove', { name: b.dataset.n }); delete airframe.px4_overrides[b.dataset.n]; renderOverrides(); }));
+  $$('#overrides .del').forEach(b => b.addEventListener('click', async () => { await api('/api/airframe/override_remove', { name: b.dataset.n }); delete airframe.px4_overrides[b.dataset.n]; loadExport(); markDirty(); }));
 }
 async function setParamValue(n, value) {
   if (status.ctl_connected) {
@@ -323,7 +341,7 @@ async function setParamValue(n, value) {
     await api('/api/airframe/override', { name: n, value });
     airframe.px4_overrides[n] = value;
   }
-  renderOverrides(); renderParams(); markDirty();
+  loadExport(); renderParams(); markDirty();
   return { ok: true, value };
 }
 
@@ -353,16 +371,17 @@ function renderParams() {
   const names = Object.keys(params).sort();
   let shown = 0;
   const html = [];
+  if (!q && !grp) { $('#param-list').innerHTML = `<div class="hint">${names.length} parameters loaded · type to search, or pick a group.</div>`; return; }
   for (const n of names) {
     const m = meta[n] || {};
     if (grp && m.group !== grp) continue;
     if (q && !(n.toLowerCase().includes(q) || (m.short || '').toLowerCase().includes(q))) continue;
-    if (++shown > 400) break;
+    if (++shown > 40) break;
     const v = params[n].value;
     const edited = airframe && airframe.px4_overrides && (n in airframe.px4_overrides);
     html.push(`<div class="prow ${n === selectedParam ? 'selected' : ''} ${edited ? 'edited' : ''}" data-n="${n}"><span class="pname">${edited ? '● ' : ''}${n}</span><span class="pval">${typeof v === 'number' && !Number.isInteger(v) ? +v.toPrecision(6) : v}${m.unit ? ' <span class="muted">' + m.unit + '</span>' : ''}</span><span class="pdesc" title="${(m.short || '').replace(/"/g, '&quot;')}">${m.short || ''}</span></div>`);
   }
-  $('#param-list').innerHTML = html.join('') + (shown > 400 ? '<div class="muted">… refine the search to see more</div>' : '');
+  $('#param-list').innerHTML = html.join('') + (shown > 40 ? '<div class="hint">… more matches, refine the search</div>' : '');
   $$('#param-list .prow').forEach(el => el.addEventListener('click', () => openParam(el.dataset.n)));
 }
 let selectedParam = null;
@@ -419,7 +438,6 @@ async function recover(btn, full) {
   btn.textContent = label; btn.disabled = false;
 }
 $('#btn-reset').addEventListener('click', (e) => recover(e.target, true));     // everything: vehicle + PX4 reboot
-$('#btn-recover').addEventListener('click', (e) => recover(e.target, false)); // lighter: estimator restart unless in failsafe
 $('#btn-pause').addEventListener('click', async () => { const r = await api('/api/sim/pause', {}); $('#btn-pause').textContent = r.paused ? 'Resume' : 'Pause'; });
 $('#btn-follow').addEventListener('click', (e) => { e.target.classList.toggle('on'); scene.setFollow(e.target.classList.contains('on')); });
 $('#sim-speed').addEventListener('change', e => api('/api/sim/speed', { speed: parseFloat(e.target.value) }));

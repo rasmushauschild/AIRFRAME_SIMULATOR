@@ -301,3 +301,9 @@ button.pill.armed:hover { filter: brightness(0.92); background: var(--red); colo
 .ov-row input { padding: 3px 6px; font-size: 12px; }
 .ov-row .ov-cur { font-variant-numeric: tabular-nums; text-align: right; }
 .prow.edited .pname { color: var(--accent); }
+
+.ov-row.ro .ov-val { font-family: var(--mono); font-size: 11.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-row.rotor { grid-template-columns: 110px 1fr 70px 60px 22px; }
+.ov-row.ro { grid-template-columns: 150px 92px 90px 1fr 22px; }
+.ov-sep { height: 1px; background: var(--line); margin: 8px 0; }
+#param-list { max-height: 360px; overflow-y: auto; }

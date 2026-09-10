@@ -55,7 +55,7 @@
   <div class="vresizer" id="resize-side" title="Drag to resize"></div>
   <aside class="panel side" id="side">
     <nav class="tabs">
-      <button data-tab="airframe" class="active">PX4 Parameters</button>
+      <button data-tab="airframe" class="active">Parameters</button>
       <button data-tab="sim">Flight</button>
       <button data-tab="connect">Connect</button>
     </nav>
@@ -116,25 +116,17 @@
       </details>
       <div id="af-problems" class="problems"></div>
 
-      <h3>Edited parameters <small>· saved with this airframe, pushed by Update PX4</small></h3>
-      <div id="overrides" class="card"><div class="hint">No hand-edited parameters yet. Edit any parameter below and it appears here.</div></div>
+      <h3>Edited parameters <small>· everything this airframe sets on PX4; saved with it, pushed by Update PX4</small></h3>
+      <div id="px4-export-status"></div>
+      <div id="overrides" class="card"></div>
+      <div class="row tight">
+        <a id="px4-download" class="pill small" href="/api/px4/export.params" download>Download .params</a>
+        <button id="px4-refresh" class="pill small">Refresh</button>
+      </div>
 
-      <details id="export-details">
-        <summary>Parameters derived from the geometry</summary>
-        <p class="help">Rotor positions and thrust axes map onto PX4's control-allocation parameters
-          (<code>CA_ROTORn_PX/PY/PZ</code>, <code>CA_ROTORn_AX/AY/AZ</code>, <code>CA_ROTORn_KM</code>), the output mapping and
-          the board rotation for the hover pitch. These are always exported from the geometry above.</p>
-        <div class="row">
-          <a id="px4-download" class="pill small" href="/api/px4/export.params" download>Download .params</a>
-          <button id="px4-refresh" class="pill small">Refresh</button>
-        </div>
-        <div id="px4-export-status"></div>
-        <table id="px4-export-table" class="grid"><thead><tr><th>Parameter</th><th>Export</th><th>On vehicle</th><th></th></tr></thead><tbody></tbody></table>
-      </details>
-
-      <h3>All parameters</h3>
+      <h3>Find a parameter</h3>
       <div class="row">
-        <input id="param-search" type="search" placeholder="Search name or description">
+        <input id="param-search" type="search" placeholder="Type to search name or description">
         <select id="param-group" style="width:150px"><option value="">All groups</option></select>
       </div>
       <div class="row tight">
@@ -236,7 +228,6 @@
       <button id="btn-update" class="pill primary" title="Write the rotor geometry and output mapping to the flight controller and save it">Update PX4</button>
       <span id="update-status" class="hint"></span>
       <span class="panel-spacer"></span>
-      <button id="btn-recover" class="pill" title="After a crash: force-disarm, reset the vehicle, restart PX4's estimator, or reboot the board if it is stuck in failsafe">Recover PX4</button>
       <button id="btn-arm" class="pill">Arm</button>
     </div>
   </aside>
