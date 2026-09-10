@@ -88,6 +88,7 @@ class PX4Link:
         self.event_decoder = None            # events.EventDecoder, set by the app
         self.board_imu: dict = {}            # what the autopilot says its IMU sees (HIGHRES_IMU)
         self.board_sys: dict = {}            # SYS_STATUS: comm drop rate etc.
+        self.rc: dict = {}                   # RC_CHANNELS from the autopilot
         self._shell_buf = bytearray()
         self._shell_lock = threading.Lock()
         self.recent_events = deque(maxlen=60)
@@ -247,6 +248,11 @@ class PX4Link:
                 if msg.device == mavlink.SERIAL_CONTROL_DEV_SHELL:
                     with self._shell_lock:
                         self._shell_buf += bytes(msg.data[:msg.count])
+            elif t == "RC_CHANNELS":
+                n = int(msg.chancount)
+                vals = [getattr(msg, f"chan{i}_raw") for i in range(1, 19)]
+                self.rc = {"count": n, "channels": vals[:max(n, 0)], "rssi": int(msg.rssi), "t": time.time(),
+                           "time_boot_ms": int(msg.time_boot_ms)}
             elif t == "SYS_STATUS":
                 self.board_sys = {"drop_rate_comm": msg.drop_rate_comm, "errors_comm": msg.errors_comm, "load": msg.load,
                                   "t": time.time()}
@@ -489,6 +495,7 @@ class PX4Link:
             "events": [e for e in list(self.recent_events)[-12:]],
             "board_imu": self.board_imu,
             "board_sys": self.board_sys,
+            "rc": self.rc if (self.rc and time.time() - self.rc.get("t", 0) < 3.0) else {},
             "last_ack": self.last_ack,
             "qgc_proxy": self.qgc_proxy,
         }

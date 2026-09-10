@@ -486,6 +486,27 @@ async function refreshEvents() {
   } catch (e) { }
   eventsTimer = setTimeout(refreshEvents, 2000);
 }
+let rcTimer = null;
+async function refreshRc() {
+  clearTimeout(rcTimer);
+  if (!$('#tab-sim').classList.contains('active')) return;
+  try {
+    const rc = await api('/api/rc');
+    const el = $('#rc-card');
+    if (!rc.channels || !rc.channels.length) {
+      el.innerHTML = `<div class="hint">no RC data from the flight controller${rc.rc_in_mode != null ? ' · COM_RC_IN_MODE = ' + rc.rc_in_mode : ''}. Plug a receiver into the board, or use a joystick through QGroundControl.</div>`;
+    } else {
+      const rows = rc.channels.map((v, i) => {
+        const pct = Math.max(0, Math.min(1, (v - 1000) / 1000));
+        const names = (rc.mapping[String(i + 1)] || []).join(', ');
+        return `<div class="rc-row"><span class="rc-n">${i + 1}</span><span class="rc-name">${names}</span><span class="rc-bar"><i style="width:${(pct * 100).toFixed(0)}%"></i></span><span class="rc-val num">${v}</span></div>`;
+      }).join('');
+      el.innerHTML = `<div class="rc-head"><b>${rc.count} channels</b><span class="hint">RSSI ${rc.rssi === 255 ? '—' : rc.rssi}${rc.rc_in_mode != null ? ' · COM_RC_IN_MODE ' + rc.rc_in_mode : ''}</span></div>${rows}`;
+    }
+  } catch (e) { }
+  rcTimer = setTimeout(refreshRc, 200);
+}
+$$('.tabs button').forEach(b => b.addEventListener('click', () => { if (b.dataset.tab === 'sim') refreshRc(); }));
 $$('.tabs button').forEach(b => b.addEventListener('click', () => { if (b.dataset.tab === 'sim') refreshEvents(); }));
 async function connectHitl(serial) {
   await connCall('/api/connection/connect', { mode: 'hitl', serial, baud: +$('#conn-baud').value || 921600 });

@@ -220,6 +220,28 @@ def build_app(state: AppState) -> FastAPI:
         out = await run_in_threadpool(link.shell, cmd, float(body.get("timeout", 3.0)))
         return {"ok": True, "output": out}
 
+    @app.get("/api/rc")
+    async def get_rc():
+        rc = dict(getattr(state.link, "rc", {}) or {})
+        rc = rc if rc and time.time() - rc.get("t", 0) < 3.0 else {}
+        # PX4 channel mapping (1-based channel numbers, 0 = unassigned)
+        names = {"RC_MAP_ROLL": "Roll", "RC_MAP_PITCH": "Pitch", "RC_MAP_THROTTLE": "Throttle", "RC_MAP_YAW": "Yaw",
+                 "RC_MAP_FLTMODE": "Flight mode", "RC_MAP_ARM_SW": "Arm", "RC_MAP_KILL_SW": "Kill", "RC_MAP_RETURN_SW": "Return",
+                 "RC_MAP_LOITER_SW": "Loiter", "RC_MAP_OFFB_SW": "Offboard", "RC_MAP_GEAR_SW": "Gear", "RC_MAP_FLAPS": "Flaps",
+                 "RC_MAP_AUX1": "Aux 1", "RC_MAP_AUX2": "Aux 2", "RC_MAP_AUX3": "Aux 3", "RC_MAP_AUX4": "Aux 4",
+                 "RC_MAP_AUX5": "Aux 5", "RC_MAP_AUX6": "Aux 6", "RC_MAP_PARAM1": "Param 1", "RC_MAP_PARAM2": "Param 2",
+                 "RC_MAP_PARAM3": "Param 3", "RC_MAP_TRANS_SW": "Transition", "RC_MAP_ENG_MOT": "Engine/motor",
+                 "RC_MAP_PAY_SW": "Payload", "RC_MAP_FAILSAFE": "Failsafe"}
+        mapping: dict[int, list[str]] = {}
+        params = getattr(state.link, "params", {}) or {}
+        for k, label in names.items():
+            v = params.get(k, {}).get("value")
+            if isinstance(v, (int, float)) and int(v) > 0:
+                mapping.setdefault(int(v), []).append(label)
+        rc["mapping"] = {str(k): v for k, v in mapping.items()}
+        rc["rc_in_mode"] = params.get("COM_RC_IN_MODE", {}).get("value")
+        return rc
+
     @app.get("/api/events")
     async def get_events():
         return {"source": state.conn.event_decoder.source if state.conn.event_decoder else "",

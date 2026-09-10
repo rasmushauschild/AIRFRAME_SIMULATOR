@@ -276,3 +276,13 @@ details[open] summary::before { transform: rotate(90deg); }
 #px4-messages .msg:first-of-type { border-top: 0; }
 #px4-messages .lvl { display: inline-block; min-width: 54px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
 #px4-messages .msg.err .lvl { color: var(--red); } #px4-messages .msg.warn .lvl { color: var(--amber); }
+
+/* RC channels */
+.rc-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.rc-row { display: grid; grid-template-columns: 22px 92px 1fr 44px; gap: 8px; align-items: center; padding: 2px 0; font-size: 12px; }
+.rc-n { color: var(--text-3); font-weight: 700; }
+.rc-name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-bar { position: relative; height: 8px; background: var(--soft-2); border-radius: 4px; overflow: hidden; }
+.rc-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 4px; transition: width 0.1s linear; }
+.rc-bar::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--rim); }
+.rc-val { text-align: right; color: var(--text-2); }
