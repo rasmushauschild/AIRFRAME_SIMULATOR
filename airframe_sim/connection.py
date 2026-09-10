@@ -403,6 +403,34 @@ class ConnectionManager:
         return r
 
     # ------------------------------------------------------------ HITL helpers
+    def recover(self) -> dict:
+        """Bring PX4 back to an armable state after a crash: force-disarm, rest the sim, then either restart the
+        estimator or, if the commander is in termination/failsafe, reboot the board."""
+        link = self.link
+        steps = []
+        if link is None or not link.ctl_connected:
+            self.sim.reset()
+            return {"ok": True, "steps": ["sim reset (no PX4 link)"]}
+        from .link import mavlink
+        if link.armed:
+            link.send_command_long(mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0.0, 21196.0)   # force disarm
+            steps.append("force-disarmed")
+            time.sleep(1.0)
+        self.sim.reset()
+        steps.append("sim reset")
+        main_mode = (link.custom_mode >> 16) & 0xFF
+        recent = " ".join(x.get("text", "") for x in list(link.recent_events)[-20:]).lower()
+        terminated = main_mode == 10 or "termination" in recent or "failsafe" in recent
+        if terminated:
+            self.log("[px4] recover: commander is in termination/failsafe, rebooting the board")
+            link.reboot()
+            steps.append("rebooted (termination/failsafe)")
+        else:
+            time.sleep(1.5)
+            link.restart_estimator()
+            steps.append("estimator restarted")
+        return {"ok": True, "steps": steps}
+
     def restart_estimator(self) -> dict:
         link = self.link
         if link is None or not link.ctl_connected:

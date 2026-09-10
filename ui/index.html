@@ -19,7 +19,7 @@
       <div class="panel-head">
         <div class="panel-title">Airframe<span id="title-name"></span></div>
         <div class="panel-spacer"></div>
-        <button class="pill" id="btn-reset" title="Put the vehicle back on the ground at the origin">Reset</button>
+        <button class="pill" id="btn-reset" title="Put the vehicle back on the ground and bring PX4 back to an armable state (disarm, restart the estimator, or reboot if it is in failsafe)">Reset</button>
         <button class="pill" id="btn-pause">Pause</button>
         <button class="pill toggle" id="btn-follow">Follow</button>
         <button class="pill theme-btn" id="btn-theme" title="Toggle dark mode">◐</button>
@@ -237,6 +237,7 @@
       <button id="btn-update" class="pill primary" title="Write the rotor geometry and output mapping to the flight controller and save it">Update PX4</button>
       <span id="update-status" class="hint"></span>
       <span class="panel-spacer"></span>
+      <button id="btn-recover" class="pill" title="After a crash: force-disarm, reset the vehicle, restart PX4's estimator, or reboot the board if it is stuck in failsafe">Recover PX4</button>
       <button id="btn-arm" class="pill">Arm</button>
     </div>
   </aside>

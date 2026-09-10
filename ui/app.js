@@ -279,9 +279,11 @@ let geometryDirty = false;
 function markDirty() { geometryDirty = true; $('#update-status').innerHTML = '<span class="warn">Changed since last update</span>'; }
 function updateFooter() {
   const armBtn = $('#btn-arm');
-  armBtn.textContent = status.armed ? 'Disarm' : 'Arm';
+  armBtn.textContent = status.armed ? 'Kill' : 'Arm';
+  armBtn.title = status.armed ? 'Force disarm immediately (motors stop, even in the air)' : 'Arm the vehicle';
   armBtn.classList.toggle('armed', !!status.armed);
   armBtn.disabled = !status.ctl_connected;
+  $('#btn-recover').disabled = !status.ctl_connected;
   const upd = $('#btn-update');
   upd.disabled = !status.ctl_connected || !!status.armed;
   upd.title = status.armed ? 'Disarm first: PX4 rebuilds its allocation when these parameters change' :
@@ -289,7 +291,7 @@ function updateFooter() {
   $$('#mode-pills .pill').forEach(b => b.classList.toggle('active', status.connected && (status.mode_name || '').toLowerCase() === b.textContent.toLowerCase()));
 }
 $('#btn-arm').addEventListener('click', async () => {
-  try { await api('/api/px4/command', { command: status.armed ? 'disarm' : 'arm' }); } catch (e) { logLine('[ui] ' + e.message); }
+  try { await api('/api/px4/command', status.armed ? { command: 'kill', force: true } : { command: 'arm' }); } catch (e) { logLine('[ui] ' + e.message); }
 });
 
 // ============================================================ parameters
@@ -377,7 +379,14 @@ $('#param-meta-fetch').addEventListener('click', async () => {
 // ============================================================ flight / sim
 $$('#tab-sim button[data-cmd]').forEach(b => b.addEventListener('click', () =>
   api('/api/px4/command', { command: b.dataset.cmd, mode: b.dataset.mode, force: b.dataset.cmd === 'kill' }).catch(e => logLine('[ui] ' + e.message))));
-$('#btn-reset').addEventListener('click', () => api('/api/sim/reset', {}));
+async function recover(btn) {
+  const label = btn.textContent; btn.textContent = 'Recovering…'; btn.disabled = true;
+  try { const r = await api('/api/px4/recover', {}); logLine('[ui] recover: ' + (r.steps || []).join(', ')); }
+  catch (e) { logLine('[ui] recover failed: ' + e.message); }
+  btn.textContent = label; btn.disabled = false;
+}
+$('#btn-reset').addEventListener('click', (e) => recover(e.target));
+$('#btn-recover').addEventListener('click', (e) => recover(e.target));
 $('#btn-pause').addEventListener('click', async () => { const r = await api('/api/sim/pause', {}); $('#btn-pause').textContent = r.paused ? 'Resume' : 'Pause'; });
 $('#btn-follow').addEventListener('click', (e) => { e.target.classList.toggle('on'); scene.setFollow(e.target.classList.contains('on')); });
 $('#sim-speed').addEventListener('change', e => api('/api/sim/speed', { speed: parseFloat(e.target.value) }));
