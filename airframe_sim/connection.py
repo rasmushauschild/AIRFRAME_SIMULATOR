@@ -322,10 +322,18 @@ class ConnectionManager:
         from shutil import which
         return which("arm-none-eabi-gcc") is not None or any(Path(d, "arm-none-eabi-gcc").is_file() for d in self.TOOLCHAIN_DIRS)
 
+    def firmware_variant(self, target: str | None) -> str:
+        """Same choice as scripts/build_hitl_firmware.sh: 'multicopter' when the board offers it, else 'default'."""
+        if not target:
+            return "default"
+        board_dir = Path(self.args.px4_dir) / "boards" / target.replace("_", "/", 1)
+        return "multicopter" if (board_dir / "multicopter.px4board").is_file() else "default"
+
     def firmware_file(self, target: str | None) -> str | None:
         if not target:
             return None
-        f = Path(self.args.px4_dir) / "build" / f"{target}_default" / f"{target}_default.px4"
+        v = self.firmware_variant(target)
+        f = Path(self.args.px4_dir) / "build" / f"{target}_{v}" / f"{target}_{v}.px4"
         return str(f) if f.is_file() else None
 
     def build_firmware(self, target: str | None = None) -> dict:
