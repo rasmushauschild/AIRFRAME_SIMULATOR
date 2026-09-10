@@ -8,6 +8,8 @@
 #     variant  board config variant; default: "multicopter" if the board has one, else "default".
 #              (fmu-v6x "default" is 100% full and does not link with pwm_out_sim added; "multicopter"
 #               drops fixed-wing/VTOL/airspeed code and fits.)
+#   PX4_REF=v1.17.0 scripts/build_hitl_firmware.sh ...   build from that tag (submodules included) so the
+#              firmware matches the release already on the board; the checkout is restored afterwards.
 #
 # Needs the ARM toolchain PX4 uses:  brew tap osx-cross/arm; brew trust osx-cross/arm && brew install osx-cross/arm/arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13
 set -euo pipefail
@@ -26,6 +28,17 @@ if ! command -v arm-none-eabi-gcc >/dev/null; then
   exit 1
 fi
 cd "$PX4_DIR"
+PREV_REF="$(git symbolic-ref -q --short HEAD || git rev-parse HEAD)"
+restore_ref() {
+  if [ -n "${PX4_REF:-}" ] && [ "$PX4_REF" != "$PREV_REF" ]; then
+    echo "restoring checkout $PREV_REF"
+    git checkout -q "$PREV_REF" && git submodule update -q --init --recursive
+  fi
+}
+if [ -n "${PX4_REF:-}" ] && [ "$PX4_REF" != "$PREV_REF" ]; then
+  echo "checking out $PX4_REF (was $PREV_REF)"
+  git checkout -q "$PX4_REF" && git submodule update -q --init --recursive
+fi
 BOARD_DIR="boards/${BOARD/_//}"                    # px4_fmu-v6x -> boards/px4/fmu-v6x
 if [ -z "$VARIANT" ]; then
   if [ -f "$BOARD_DIR/multicopter.px4board" ]; then VARIANT=multicopter; else VARIANT=default; fi
@@ -42,8 +55,8 @@ else
   echo "CONFIG_MODULES_SIMULATION_PWM_OUT_SIM=y" >> "$CFG"
 fi
 
-restore_cfg() { git checkout -q -- "$CFG" 2>/dev/null || true; }
-trap restore_cfg EXIT      # leave the checkout clean; the built .px4 keeps the module regardless
+cleanup() { git checkout -q -- "$CFG" 2>/dev/null || true; restore_ref; }
+trap cleanup EXIT          # leave the checkout clean; the built .px4 keeps the module regardless
 
 make "$TARGET"
 OUT="build/$TARGET/$TARGET.px4"

@@ -138,12 +138,14 @@ class FirmwareJob:
     def running(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
-    def start(self, board: str, action: str, px4_dir: str, venv_bin: str) -> dict:
+    def start(self, board: str, action: str, px4_dir: str, venv_bin: str, ref: str | None = None) -> dict:
         if self.running():
             return {"ok": False, "error": f"{self.action} already running"}
         script = PROJECT_DIR / "scripts" / "build_hitl_firmware.sh"
         env = dict(os.environ)
         env["PX4_DIR"] = px4_dir
+        if ref:
+            env["PX4_REF"] = ref
         env["PATH"] = venv_bin + ":" + env.get("PATH", "")
         self.action, self.board, self.result, self.exit_code = action, board, None, None
         self.log(f"[firmware] {action} {board} (this takes a few minutes; watch the log)")
@@ -343,7 +345,14 @@ class ConnectionManager:
         if not self.toolchain_present():
             return {"ok": False, "error": "ARM toolchain missing. Run:  brew tap osx-cross/arm; brew trust osx-cross/arm && brew install osx-cross/arm/arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13   then try again."}
         venv_bin = str(PROJECT_DIR / ".venv" / "bin")
-        return self.firmware_job.start(target, "build", self.args.px4_dir, venv_bin)
+        return self.firmware_job.start(target, "build", self.args.px4_dir, venv_bin, ref=self.board_release_tag())
+
+    def board_release_tag(self) -> str | None:
+        """'1.17.0 release' on the board -> 'v1.17.0', so the HITL build matches what is flashed."""
+        fw = self.link.firmware if self.link else {}
+        ver = (fw or {}).get("version", "")
+        m = re.match(r"(\d+\.\d+\.\d+) release", ver)
+        return f"v{m.group(1)}" if m else None
 
     def upload_firmware(self, target: str | None = None) -> dict:
         """Flash the built firmware. We must release the serial port first; the link reconnects after."""
