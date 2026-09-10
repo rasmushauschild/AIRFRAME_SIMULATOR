@@ -104,10 +104,13 @@ def build_app(state: AppState) -> FastAPI:
         for x in reversed(list(getattr(state.link, "recent_events", []) or [])):
             if x.get("name") == "commander_arming_check_summary":
                 d = dict(zip(x.get("arg_names", []), x.get("args", [])))
+                # PX4 lists the modes it would arm in; the error mask also carries the always-failing
+                # offboard/mission checks ("system"), so it is not usable as a gate on its own.
                 can = str(d.get("can_arm", ""))
-                err = d.get("error", 0)
-                ready = (err in (0, "0", None)) and ("takeoff" in can or "loiter" in can or "stab" in can)
-                why = "" if ready else ("health errors: " + str(err).replace("|", ", ") if err not in (0, "0", None) else "estimator not ready")
+                mode_now = s.get("mode_name", "").lower()
+                aliases = {"hold": "loiter", "stabilized": "stab", "position": "posctl", "altitude": "altctl"}
+                ready = ("takeoff" in can) or ("loiter" in can) or (aliases.get(mode_now, mode_now) in can.split("|"))
+                why = "" if ready else "PX4 will not arm yet (estimator or health checks); see the Flight tab"
                 break
         s["arm_ready"] = bool(s["ctl_connected"]) and (ready or bool(s["armed"]))
         s["arm_block_reason"] = why
