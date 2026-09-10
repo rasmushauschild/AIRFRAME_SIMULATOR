@@ -75,7 +75,24 @@ function setAirframe(af) {
   }
   renderRotorTable();
   renderMotorSliders();
+  fillMotorCard();
 }
+const KIND_DEFAULTS = { prop: { km: 0.05, tau: 0.04, prop_diameter: 0.25, thrust_exponent: 2, ram_drag: false },
+                        ducted: { km: 0.01, tau: 0.12, prop_diameter: 0.12, thrust_exponent: 2, ram_drag: true } };
+function fillMotorCard() {
+  const r = airframe.rotors[selected >= 0 ? selected : 0]; if (!r) return;
+  $('#m-kind').value = r.kind || 'prop'; $('#m-tmax').value = r.max_thrust; $('#m-tau').value = r.tau;
+  $('#m-km').value = Math.abs(r.km); $('#m-dia').value = r.prop_diameter; $('#m-exp').value = r.thrust_exponent; $('#m-ram').checked = !!r.ram_drag;
+}
+function applyMotorCard(kindChanged) {
+  const kind = $('#m-kind').value;
+  if (kindChanged) { const d = KIND_DEFAULTS[kind]; $('#m-tau').value = d.tau; $('#m-km').value = d.km; $('#m-dia').value = d.prop_diameter; $('#m-exp').value = d.thrust_exponent; $('#m-ram').checked = d.ram_drag; }
+  const tmax = +$('#m-tmax').value, tau = +$('#m-tau').value, km = Math.abs(+$('#m-km').value), dia = +$('#m-dia').value, ex = +$('#m-exp').value, ram = $('#m-ram').checked;
+  airframe.rotors.forEach(r => { r.kind = kind; r.max_thrust = tmax; r.tau = tau; r.km = (r.km >= 0 ? 1 : -1) * km; r.prop_diameter = dia; r.thrust_exponent = ex; r.ram_drag = ram; });
+  setAirframe(airframe); pushAirframe(true);
+}
+$('#m-kind').addEventListener('change', () => applyMotorCard(true));
+['m-tmax', 'm-tau', 'm-km', 'm-dia', 'm-exp', 'm-ram'].forEach(id => $('#' + id).addEventListener('change', () => applyMotorCard(false)));
 
 function bindNumber(id, fn) {
   $('#' + id).addEventListener('change', (e) => { fn(parseFloat(e.target.value)); scene.setAirframe(airframe); pushAirframe(true); });
@@ -194,7 +211,7 @@ function renderReadout() {
   el.innerHTML = `<b>Motor ${selected + 1}</b> pos [${r.pos.map(v => fmt(v)).join(', ')}] · axis [${r.axis.map(v => fmt(v, 3)).join(', ')}] (${tilt.toFixed(1)}° from vertical) · ${r.km >= 0 ? 'CCW' : 'CW'} · CA_ROTOR${selected}_*`;
 }
 $('#rotor-add').addEventListener('click', () => {
-  const base = airframe.rotors[selected] || airframe.rotors[airframe.rotors.length - 1] || { pos: [0.2, 0, 0], axis: [0, 0, -1], km: 0.05, max_thrust: 8, tau: 0.04, prop_diameter: 0.25, thrust_exponent: 2 };
+  const base = airframe.rotors[selected] || airframe.rotors[airframe.rotors.length - 1] || { pos: [0.2, 0, 0], axis: [0, 0, -1], km: 0.05, max_thrust: 8, tau: 0.04, prop_diameter: 0.25, thrust_exponent: 2, kind: 'prop', ram_drag: false };
   const n = JSON.parse(JSON.stringify(base));
   n.pos = [n.pos[0] + 0.05, n.pos[1] + 0.05, n.pos[2]];
   airframe.rotors.push(n); selected = airframe.rotors.length - 1;
@@ -212,7 +229,7 @@ $('#rotor-mirror-x').addEventListener('click', () => mirror(0));
 $('#rotor-apply-all').addEventListener('click', () => {
   if (selected < 0) return;
   const s = airframe.rotors[selected];
-  airframe.rotors.forEach(r => { r.max_thrust = s.max_thrust; r.tau = s.tau; r.prop_diameter = s.prop_diameter; r.thrust_exponent = s.thrust_exponent; });
+  airframe.rotors.forEach(r => { r.max_thrust = s.max_thrust; r.tau = s.tau; r.prop_diameter = s.prop_diameter; r.thrust_exponent = s.thrust_exponent; r.kind = s.kind; r.ram_drag = s.ram_drag; r.km = (r.km >= 0 ? 1 : -1) * Math.abs(s.km); });
   setAirframe(airframe); pushAirframe(true);
 });
 

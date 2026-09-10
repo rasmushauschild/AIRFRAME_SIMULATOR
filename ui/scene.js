@@ -54,6 +54,7 @@ export function createScene(canvas, handlers) {
   const matCW = new THREE.MeshStandardMaterial({ color: 0xff9500, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
   const matSel = new THREE.MeshStandardMaterial({ color: 0x0a84ff, roughness: 0.4 });
   const motorMat = new THREE.MeshStandardMaterial({ color: theme.motor, roughness: 0.5, metalness: 0.5 });
+  const ductMat = new THREE.MeshStandardMaterial({ color: 0x8a8f9a, roughness: 0.5, metalness: 0.3, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
   const bodyAxes = new THREE.AxesHelper(0.25);
   frame.add(bodyAxes);
 
@@ -141,8 +142,11 @@ export function createScene(canvas, handlers) {
       disc.userData.rotorIndex = i;
       const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.03, 18), motorMat);
       motor.userData.rotorIndex = i;
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(rad, 0.003, 6, 48), r.km >= 0 ? matCCW : matCW);
-      ring.rotation.x = Math.PI / 2; ring.position.y = 0.02;
+      const ducted = r.kind === 'ducted';
+      const ring = ducted
+        ? new THREE.Mesh(new THREE.CylinderGeometry(rad * 1.08, rad * 1.08, rad * 1.1, 40, 1, true), ductMat)
+        : new THREE.Mesh(new THREE.TorusGeometry(rad, 0.003, 6, 48), r.km >= 0 ? matCCW : matCW);
+      if (ducted) { ring.position.y = 0.02; } else { ring.rotation.x = Math.PI / 2; ring.position.y = 0.02; }
       const arrow = makeThrustArrow();
       const spinArrow = makeSpinArrow(rad * 0.75, r.km >= 0);
       spinArrow.position.y = 0.024;
@@ -184,7 +188,7 @@ export function createScene(canvas, handlers) {
     n.group.position.copy(frdToThree(r.pos));
     n.group.quaternion.setFromUnitVectors(UP, frdToThree(r.axis).normalize());
     const m = r.km >= 0 ? matCCW : matCW;
-    n.disc.material = m; n.ring.material = m;
+    n.disc.material = m; if (r.kind !== 'ducted') n.ring.material = m;
     updateArm(n, r);
   }
 

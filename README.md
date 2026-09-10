@@ -122,6 +122,25 @@ Arm, disarm, kill, takeoff, land, hold, position, RTL; sim speed, sensor noise o
 per-motor override sliders that bypass PX4 (useful for checking a geometry's static thrust/torque);
 live per-rotor command, speed and thrust.
 
+## Rotor types: propellers and ducted fans
+
+Each rotor has a `kind`. The **Motors** card on the Geometry tab switches all rotors and fills in sensible defaults:
+
+| | propeller | ducted fan |
+|---|---|---|
+| reaction torque per thrust (`km`, exported as `CA_ROTORn_KM`) | 0.05 | 0.01 (stator cancels the swirl) |
+| spool-up time constant | 0.04 s | 0.12 s |
+| fan / prop diameter | 0.25 m | 0.12 m |
+| ram (momentum) drag | off | on |
+
+Ram drag models the duct swallowing a mass flow `mdot = sqrt(2 rho A T)`: any airflow arriving perpendicular to the
+duct axis is turned into the duct, which costs `-mdot * v_perp` at the duct location. It slows the vehicle in forward
+flight and, because it acts at the ducts rather than the CG, it also pitches/rolls a layout with ducts above or below
+the CG. PX4 does not know about this; it just sees the resulting motion through the simulated sensors.
+
+Low `km` also means little yaw authority from torque differences. PX4's allocator then needs large thrust differences
+to yaw, which the hover check on the Geometry tab reflects.
+
 ## Notes and limits
 
 * The physics is a clean rigid body with per-rotor thrust/torque, quadratic drag and spring-damper legs. There is no

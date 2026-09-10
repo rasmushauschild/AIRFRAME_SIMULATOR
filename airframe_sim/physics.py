@@ -93,6 +93,8 @@ class RigidBodySim:
         self.rotor_tmax = np.array([r.max_thrust for r in airframe.rotors], dtype=float)
         self.rotor_tau = np.array([max(r.tau, 1e-3) for r in airframe.rotors], dtype=float)
         self.rotor_exp = np.array([r.thrust_exponent for r in airframe.rotors], dtype=float)
+        self.rotor_ram = np.array([bool(getattr(r, "ram_drag", False)) for r in airframe.rotors], dtype=bool)
+        self.rotor_area = np.array([np.pi * (r.prop_diameter / 2) ** 2 for r in airframe.rotors], dtype=float)
         self.drag_q = np.array(airframe.drag_quadratic, dtype=float)
         self.drag_ang = np.array(airframe.drag_angular, dtype=float)
         self.legs = np.array(airframe.leg_points, dtype=float).reshape(-1, 3)
@@ -133,6 +135,19 @@ class RigidBodySim:
         v_air_body = R.T @ (vel - self.wind_ned)
         F_body += -self.drag_q * v_air_body * np.abs(v_air_body)
         M_body += -self.drag_ang * rates * np.abs(rates)
+
+        # ducted fans: momentum (ram) drag. The inlet swallows mass flow mdot = sqrt(2 rho A T); air arriving with a
+        # velocity component perpendicular to the duct axis must be turned into the duct, which costs -mdot * v_perp
+        # applied at the duct (so it also pitches/rolls the vehicle in forward flight).
+        if self.rotor_ram.any():
+            mdot = np.sqrt(2.0 * 1.225 * self.rotor_area * np.maximum(thrust, 0.0)) * self.rotor_ram
+            for i in np.nonzero(self.rotor_ram)[0]:
+                v_pt = v_air_body + np.cross(rates, self.rotor_pos[i])
+                a = self.rotor_axis[i]
+                v_perp = v_pt - np.dot(v_pt, a) * a
+                f = -mdot[i] * v_perp
+                F_body += f
+                M_body += np.cross(self.rotor_pos[i], f)
 
         F_ned = R @ F_body + np.array([0.0, 0.0, self.mass * G])
 

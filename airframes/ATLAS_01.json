@@ -1,5 +1,5 @@
 {
-  "name": "Multirotor 10",
+  "name": "ATLAS_01",
   "mass": 3,
   "inertia": [
     0.07547,
@@ -59,7 +59,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     },
     {
       "pos": [
@@ -76,7 +78,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     },
     {
       "pos": [
@@ -93,7 +97,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     },
     {
       "pos": [
@@ -110,7 +116,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     },
     {
       "pos": [
@@ -127,7 +135,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     },
     {
       "pos": [
@@ -144,7 +154,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     },
     {
       "pos": [
@@ -161,7 +173,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     },
     {
       "pos": [
@@ -178,7 +192,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     },
     {
       "pos": [
@@ -195,7 +211,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     },
     {
       "pos": [
@@ -212,7 +230,9 @@
       "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
-      "thrust_exponent": 2
+      "thrust_exponent": 2,
+      "kind": "prop",
+      "ram_drag": false
     }
   ]
 }

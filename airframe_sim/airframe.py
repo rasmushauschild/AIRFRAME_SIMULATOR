@@ -32,6 +32,15 @@ def _unit(v: list[float]) -> list[float]:
     return [c / n for c in v]
 
 
+ROTOR_KINDS = {
+    # defaults applied when a rotor is switched to this kind (km keeps its sign = spin direction)
+    "prop": {"km": 0.05, "tau": 0.04, "prop_diameter": 0.25, "thrust_exponent": 2.0, "ram_drag": False},
+    # Electric ducted fan: stator vanes cancel most of the swirl (tiny reaction torque), small heavy rotor at
+    # high rpm spools slower, and the duct swallows a mass flow that produces momentum ("ram") drag in crossflow.
+    "ducted": {"km": 0.01, "tau": 0.12, "prop_diameter": 0.12, "thrust_exponent": 2.0, "ram_drag": True},
+}
+
+
 @dataclass
 class Rotor:
     pos: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])      # m, FRD
@@ -39,8 +48,17 @@ class Rotor:
     km: float = 0.05            # moment coefficient, signed (see module docstring)
     max_thrust: float = 8.0     # N at full command
     tau: float = 0.04           # motor/prop spin-up time constant, s
-    prop_diameter: float = 0.25  # m, visual + disc area
+    prop_diameter: float = 0.25  # m, visual + disc area (fan diameter for a duct)
     thrust_exponent: float = 2.0  # thrust = max_thrust * omega_norm ** exponent
+    kind: str = "prop"          # "prop" | "ducted"
+    ram_drag: bool = False      # momentum drag of the inlet mass flow in crossflow (ducted fans)
+
+    def set_kind(self, kind: str) -> "Rotor":
+        d = ROTOR_KINDS.get(kind, ROTOR_KINDS["prop"])
+        self.kind = kind
+        self.km = (1.0 if self.km >= 0 else -1.0) * d["km"]
+        self.tau, self.prop_diameter, self.thrust_exponent, self.ram_drag = d["tau"], d["prop_diameter"], d["thrust_exponent"], d["ram_drag"]
+        return self
 
     def normalized(self) -> "Rotor":
         self.axis = _unit(self.axis)

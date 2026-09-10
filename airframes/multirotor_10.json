@@ -51,15 +51,17 @@
         -0.14
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -68,15 +70,17 @@
         -0.14
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": 0.05,
+      "km": 0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -85,15 +89,17 @@
         -0.09
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -102,15 +108,17 @@
         -0.09
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": 0.05,
+      "km": 0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -119,15 +127,17 @@
         -0.04
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -136,15 +146,17 @@
         -0.04
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": 0.05,
+      "km": 0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -153,15 +165,17 @@
         0.01
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -170,15 +184,17 @@
         0.01
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": 0.05,
+      "km": 0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -187,15 +203,17 @@
         0.08
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -204,15 +222,17 @@
         0.08
       ],
       "axis": [
-        0,
-        0,
-        -1
+        0.0,
+        0.0,
+        -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 8.0,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
-      "thrust_exponent": 2.0
+      "tau": 0.12,
+      "prop_diameter": 0.12,
+      "thrust_exponent": 2.0,
+      "kind": "ducted",
+      "ram_drag": true
     }
   ]
 }
