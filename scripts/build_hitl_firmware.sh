@@ -5,7 +5,7 @@
 #   scripts/build_hitl_firmware.sh [board]            e.g. px4_fmu-v6x (default), px4_fmu-v5, px4_fmu-v6c
 #   scripts/build_hitl_firmware.sh px4_fmu-v6x upload  # build, then flash over USB (unplug/replug when asked)
 #
-# Needs the ARM toolchain PX4 uses:  brew tap osx-cross/arm && brew install arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13
+# Needs the ARM toolchain PX4 uses:  brew tap osx-cross/arm; brew trust osx-cross/arm && brew install osx-cross/arm/arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13
 set -euo pipefail
 BOARD="${1:-px4_fmu-v6x}"
 ACTION="${2:-build}"
@@ -15,7 +15,7 @@ export PATH="$HERE/.venv/bin:$PATH"
 
 if ! command -v arm-none-eabi-gcc >/dev/null; then
   echo "arm-none-eabi-gcc not found. Install the toolchain first:"
-  echo "  brew tap osx-cross/arm && brew install arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13"
+  echo "  brew tap osx-cross/arm; brew trust osx-cross/arm && brew install osx-cross/arm/arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13"
   exit 1
 fi
 cd "$PX4_DIR"

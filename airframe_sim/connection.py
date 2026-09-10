@@ -331,7 +331,7 @@ class ConnectionManager:
         if not target:
             return {"ok": False, "error": "could not tell the board type from USB; pass the target, e.g. px4_fmu-v6x"}
         if not self.toolchain_present():
-            return {"ok": False, "error": "ARM toolchain missing. Run:  brew tap osx-cross/arm && brew install arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13   then try again."}
+            return {"ok": False, "error": "ARM toolchain missing. Run:  brew tap osx-cross/arm; brew trust osx-cross/arm && brew install osx-cross/arm/arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13   then try again."}
         venv_bin = str(PROJECT_DIR / ".venv" / "bin")
         return self.firmware_job.start(target, "build", self.args.px4_dir, venv_bin)
 
@@ -404,7 +404,7 @@ class ConnectionManager:
                 fw_detail += f"A HITL-capable build for {board['target']} is ready: flash it (about a minute, the board reboots)."
                 fw_action = "upload_firmware"
             elif not self.toolchain_present():
-                fw_detail += "Install the ARM toolchain once (brew tap osx-cross/arm && brew install arm-gcc-bin@13), then build here."
+                fw_detail += "Install the ARM toolchain once (see the README: brew trust osx-cross/arm, then brew install osx-cross/arm/arm-gcc-bin@13), then build here."
                 fw_action = "build_firmware"
             elif board["target"]:
                 fw_detail += f"Build a HITL-capable firmware for {board['target']} here (a few minutes), then flash it."

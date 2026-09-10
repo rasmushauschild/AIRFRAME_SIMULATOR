@@ -71,7 +71,7 @@ It lists the board, connects with one click, and walks a checklist:
    with `CONFIG_MODULES_SIMULATION_PWM_OUT_SIM=y`, and the standard release firmware for most boards (fmu-v6x
    included) leaves it out. If the board lacks it, the checklist offers **Build firmware** (runs
    `scripts/build_hitl_firmware.sh` for the detected board) and then **Flash firmware**. Building needs the ARM
-   toolchain once: `brew tap osx-cross/arm && brew install arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13`.
+   toolchain once: `brew tap osx-cross/arm; brew trust osx-cross/arm && brew install osx-cross/arm/arm-gcc-bin@13 && brew link --overwrite --force arm-gcc-bin@13`.
    Parameters survive the flash.
 4. **HITL enabled on the board** – **Enable HITL** sets `SYS_HITL = 1`, saves, reboots; the link reconnects itself.
 5. **Board is in HIL mode and streaming** – the heartbeat carries the HIL flag and actuator outputs arrive.
