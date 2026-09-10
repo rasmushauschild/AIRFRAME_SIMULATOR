@@ -9,6 +9,7 @@ import argparse
 import atexit
 import glob
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -83,9 +84,11 @@ def launch_px4(px4_dir: str, model: str, log, instance: int = 0, rootfs: str | N
     proc = subprocess.Popen(cmd, cwd=str(rootfs), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1, start_new_session=True)
 
+    ansi = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
     def pump():
         for line in proc.stdout:
-            log(f"[px4] {line.rstrip()}")
+            log(f"[px4] {ansi.sub('', line).rstrip()}")
         log(f"[px4] exited with code {proc.poll()}")
 
     threading.Thread(target=pump, daemon=True).start()
@@ -101,7 +104,7 @@ def main(argv=None) -> int:
     ap.add_argument("--serial", default=None, help="HITL: Pixhawk serial port (default: first /dev/cu.usbmodem*)")
     ap.add_argument("--baud", type=int, default=921600)
     ap.add_argument("--qgc", default="127.0.0.1:14550", help="HITL: forward vehicle MAVLink to QGC at this UDP address ('' to disable)")
-    ap.add_argument("--airframe", default=None, help="airframe JSON to load (default: airframes/quad_x.json or built-in Quad X)")
+    ap.add_argument("--airframe", default=None, help="airframe JSON to load (default: airframes/multirotor_10.json)")
     ap.add_argument("--px4-dir", default=os.path.expanduser("~/PX4-Autopilot"))
     ap.add_argument("--launch-px4", action="store_true", help="SITL: start PX4 SITL from --px4-dir automatically")
     ap.add_argument("--px4-model", default="none_iris", help="PX4_SIM_MODEL for --launch-px4 (default none_iris)")
@@ -126,8 +129,8 @@ def main(argv=None) -> int:
     # airframe
     if args.airframe:
         airframe = Airframe.load(args.airframe)
-    elif (PROJECT_DIR / "airframes" / "quad_x.json").is_file():
-        airframe = Airframe.load(PROJECT_DIR / "airframes" / "quad_x.json")
+    elif (PROJECT_DIR / "airframes" / "multirotor_10.json").is_file():
+        airframe = Airframe.load(PROJECT_DIR / "airframes" / "multirotor_10.json")
     else:
         airframe = quad_x()
     log(f"[sim] airframe: {airframe.name} ({len(airframe.rotors)} rotors, {airframe.mass:.2f} kg)")

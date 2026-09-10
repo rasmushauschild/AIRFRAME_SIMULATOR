@@ -12,8 +12,11 @@ export function createScene(canvas, handlers) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0f1216);
-  scene.fog = new THREE.Fog(0x0f1216, 40, 140);
+  const THEMES = {
+    light: { bg: 0xf6f6f8, grid1: 0xd6d7dd, grid2: 0xe6e7ec, ground: 0xf3f3f6, body: 0x3a3a3f, arm: 0x9a9aa3, motor: 0x2a2a2f },
+    dark: { bg: 0x131419, grid1: 0x2a2c34, grid2: 0x1d1f26, ground: 0x15161b, body: 0x4a4d57, arm: 0x8a8f9a, motor: 0x22242b },
+  };
+  let theme = THEMES.light;
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 500);
   camera.position.set(1.4, 1.0, 1.6);
@@ -29,28 +32,28 @@ export function createScene(canvas, handlers) {
   scene.add(sun);
 
   // ground
-  const grid = new THREE.GridHelper(200, 200, 0x2a3038, 0x1c2128);
+  let grid = new THREE.GridHelper(200, 200, theme.grid1, theme.grid2);
   scene.add(grid);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x12161c, roughness: 1 }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: theme.ground, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.002;
   scene.add(ground);
   // world axes: N (red x), E (blue z), up (green)
   scene.add(new THREE.AxesHelper(0.5));
-  addLabel(scene, 'N', [0.55, 0.02, 0], 0xff6b6b);
-  addLabel(scene, 'E', [0, 0.02, 0.55], 0x6b9bff);
+  addLabel(scene, 'N', [0.55, 0.02, 0], 0xff3b30);
+  addLabel(scene, 'E', [0, 0.02, 0.55], 0x0a84ff);
 
   // vehicle
   const vehicle = new THREE.Group();
   scene.add(vehicle);
   const frame = new THREE.Group();     // geometry only (edited)
   vehicle.add(frame);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3b4655, roughness: 0.6, metalness: 0.2 });
-  const armMat = new THREE.MeshStandardMaterial({ color: 0x8a94a3, roughness: 0.7 });
-  const matCCW = new THREE.MeshStandardMaterial({ color: 0x4cd37a, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
-  const matCW = new THREE.MeshStandardMaterial({ color: 0xffb84d, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
-  const matSel = new THREE.MeshStandardMaterial({ color: 0x4fb3ff, roughness: 0.4 });
-  const motorMat = new THREE.MeshStandardMaterial({ color: 0x222831, roughness: 0.5, metalness: 0.5 });
+  const bodyMat = new THREE.MeshStandardMaterial({ color: theme.body, roughness: 0.6, metalness: 0.2 });
+  const armMat = new THREE.MeshStandardMaterial({ color: theme.arm, roughness: 0.7 });
+  const matCCW = new THREE.MeshStandardMaterial({ color: 0x34c759, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+  const matCW = new THREE.MeshStandardMaterial({ color: 0xff9500, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+  const matSel = new THREE.MeshStandardMaterial({ color: 0x0a84ff, roughness: 0.4 });
+  const motorMat = new THREE.MeshStandardMaterial({ color: theme.motor, roughness: 0.5, metalness: 0.5 });
   const bodyAxes = new THREE.AxesHelper(0.25);
   frame.add(bodyAxes);
 
@@ -140,10 +143,10 @@ export function createScene(canvas, handlers) {
       motor.userData.rotorIndex = i;
       const ring = new THREE.Mesh(new THREE.TorusGeometry(rad, 0.003, 6, 48), r.km >= 0 ? matCCW : matCW);
       ring.rotation.x = Math.PI / 2; ring.position.y = 0.02;
-      const arrow = new THREE.ArrowHelper(UP, new THREE.Vector3(0, 0.02, 0), 0.001, 0x4fb3ff, 0.04, 0.02);
+      const arrow = new THREE.ArrowHelper(UP, new THREE.Vector3(0, 0.02, 0), 0.001, 0x0a84ff, 0.04, 0.02);
       const spinArrow = makeSpinArrow(rad * 0.75, r.km >= 0);
       spinArrow.position.y = 0.024;
-      const label = makeSprite(String(i + 1));
+      const label = makeSprite(String(i + 1), document.documentElement.dataset.theme === 'dark' ? '#fafafa' : '#171717');
       label.position.set(0, 0.09, 0);
       group.add(disc, motor, ring, arrow, spinArrow, label);
       const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 1, 8), armMat);
@@ -230,8 +233,21 @@ export function createScene(canvas, handlers) {
   }
   animate();
 
+  function setTheme(name) {
+    theme = THEMES[name] || THEMES.light;
+    scene.background = new THREE.Color(theme.bg);
+    scene.fog = new THREE.Fog(theme.bg, 40, 140);
+    scene.remove(grid);
+    grid = new THREE.GridHelper(200, 200, theme.grid1, theme.grid2);
+    scene.add(grid);
+    ground.material.color.set(theme.ground);
+    bodyMat.color.set(theme.body); armMat.color.set(theme.arm); motorMat.color.set(theme.motor);
+    rotorNodes.forEach(n => { n.label.material.map = makeSprite(String(n.rotorIndex + 1), name === 'dark' ? '#fafafa' : '#171717', name === 'dark').material.map; });
+  }
+  setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+
   return {
-    setAirframe, updateState, select, updateRotorNode,
+    setAirframe, updateState, select, updateRotorNode, setTheme,
     setFollow: (b) => { follow = b; if (!b) orbit.target.set(0, 0.1, 0); },
     setMode: (m) => gizmo.setMode(m),
     get selected() { return selected; },
@@ -239,11 +255,12 @@ export function createScene(canvas, handlers) {
   };
 }
 
-function makeSprite(text, color = '#e6e9ee') {
+function makeSprite(text, color = '#171717', dark = document.documentElement.dataset.theme === 'dark') {
   const c = document.createElement('canvas'); c.width = 64; c.height = 64;
   const g = c.getContext('2d');
-  g.fillStyle = 'rgba(15,18,22,0.75)'; g.beginPath(); g.arc(32, 32, 28, 0, Math.PI * 2); g.fill();
-  g.fillStyle = color; g.font = 'bold 34px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = dark ? 'rgba(18,19,23,0.92)' : 'rgba(255,255,255,0.92)'; g.beginPath(); g.arc(32, 32, 28, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'; g.lineWidth = 2; g.stroke();
+  g.fillStyle = color; g.font = '700 32px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText(text, 32, 34);
   const tex = new THREE.CanvasTexture(c);
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
@@ -267,10 +284,10 @@ function makeSpinArrow(radius, ccw) {
     pts.push(new THREE.Vector3(radius * Math.cos(a), 0, -s * radius * Math.sin(a)));
   }
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
-    new THREE.LineBasicMaterial({ color: ccw ? 0x4cd37a : 0xffb84d }));
+    new THREE.LineBasicMaterial({ color: ccw ? 0x34c759 : 0xff9500 }));
   const tip = pts[pts.length - 1], prev = pts[pts.length - 2];
   const dir = tip.clone().sub(prev).normalize();
-  const head = new THREE.ArrowHelper(dir, prev, 0.02, ccw ? 0x4cd37a : 0xffb84d, 0.02, 0.012);
+  const head = new THREE.ArrowHelper(dir, prev, 0.02, ccw ? 0x34c759 : 0xff9500, 0.02, 0.012);
   const g = new THREE.Group(); g.add(line, head);
   return g;
 }

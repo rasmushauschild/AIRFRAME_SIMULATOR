@@ -50,6 +50,7 @@ function setAirframe(af) {
   airframe = af;
   scene.setAirframe(af);
   $('#af-name').value = af.name;
+  $('#title-name').textContent = af.name;
   $('#af-mass').value = af.mass;
   ['ixx', 'iyy', 'izz'].forEach((k, i) => $('#af-' + k).value = +af.inertia[i].toFixed(5));
   ['dragx', 'dragy', 'dragz'].forEach((k, i) => $('#af-' + k).value = af.drag_quadratic[i]);
@@ -65,7 +66,7 @@ function setAirframe(af) {
 function bindNumber(id, fn) {
   $('#' + id).addEventListener('change', (e) => { fn(parseFloat(e.target.value)); scene.setAirframe(airframe); pushAirframe(true); });
 }
-$('#af-name').addEventListener('change', e => { airframe.name = e.target.value; pushAirframe(true); });
+$('#af-name').addEventListener('change', e => { airframe.name = e.target.value; $('#title-name').textContent = airframe.name; pushAirframe(true); });
 bindNumber('af-mass', v => airframe.mass = v);
 bindNumber('af-ixx', v => airframe.inertia[0] = v);
 bindNumber('af-iyy', v => airframe.inertia[1] = v);
@@ -97,9 +98,9 @@ $('#af-save').addEventListener('click', async () => {
 async function loadPresetList() {
   const r = await api('/api/airframes');
   const sel = $('#af-preset');
-  sel.innerHTML = '<option value="">— load —</option>' +
-    r.presets.map(p => `<option value="${p}">built-in: ${p}</option>`).join('') +
-    r.files.map(f => `<option value="${f}">${f}</option>`).join('');
+  sel.innerHTML = '<option value="">Choose…</option>' +
+    r.files.map(f => `<option value="${f}">${f.replace(/\.json$/, '')}</option>`).join('') +
+    r.presets.map(p => `<option value="${p}">built-in ${p}</option>`).join('');
 }
 $('#af-preset').addEventListener('change', async (e) => {
   if (!e.target.value) return;
@@ -123,7 +124,7 @@ const tiltToAxis = (tilt, dir) => {
 function renderRotorTable() {
   const el = $('#rotor-table');
   const rows = airframe.rotors.map((r, i) => rotorRowHtml(i, r)).join('');
-  el.innerHTML = `<table><thead><tr><th>#</th><th>X</th><th>Y</th><th>Z</th><th title="tilt from vertical, degrees">tilt°</th><th title="direction of tilt: 0 = forward, 90 = right">dir°</th><th>spin</th><th title="max thrust N">Tmax</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML = `<table class="grid"><thead><tr><th>#</th><th>X</th><th>Y</th><th>Z</th><th title="tilt from vertical, degrees">Tilt°</th><th title="direction of tilt: 0 = forward, 90 = right">Dir°</th><th>Spin</th><th title="max thrust N">Tmax</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   el.querySelectorAll('tr[data-i]').forEach(tr => {
     const i = +tr.dataset.i;
     tr.addEventListener('click', (e) => { if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('spin') && !e.target.classList.contains('del')) { selected = i; scene.select(i); renderRotorTable(); renderReadout(); } });
@@ -135,7 +136,7 @@ function renderRotorTable() {
 function rotorRowHtml(i, r) {
   const [tilt, dir] = axisToTilt(r.axis);
   const ccw = r.km >= 0;
-  return `<tr data-i="${i}" class="${i === selected ? 'selected' : ''}"><td>${i + 1}</td>
+  return `<tr data-i="${i}" class="${i === selected ? 'selected' : ''}"><td class="idx">${i + 1}</td>
   <td><input type="number" step="0.005" data-k="x" value="${r.pos[0]}"></td>
   <td><input type="number" step="0.005" data-k="y" value="${r.pos[1]}"></td>
   <td><input type="number" step="0.005" data-k="z" value="${r.pos[2]}"></td>
@@ -169,7 +170,7 @@ function renderReadout() {
   const r = airframe.rotors[selected];
   const [tilt, dir] = axisToTilt(r.axis);
   el.classList.add('show');
-  el.textContent = `Motor ${selected + 1}  pos FRD [${r.pos.map(v => fmt(v)).join(', ')}]  axis [${r.axis.map(v => fmt(v, 2)).join(', ')}]  tilt ${tilt.toFixed(1)}° dir ${dir.toFixed(0)}°  ${r.km >= 0 ? 'CCW' : 'CW'}  → CA_ROTOR${selected}_*`;
+  el.innerHTML = `<b>Motor ${selected + 1}</b> pos [${r.pos.map(v => fmt(v)).join(', ')}] · axis [${r.axis.map(v => fmt(v, 2)).join(', ')}] · tilt ${tilt.toFixed(1)}° dir ${dir.toFixed(0)}° · ${r.km >= 0 ? 'CCW' : 'CW'} · CA_ROTOR${selected}_*`;
 }
 $('#rotor-add').addEventListener('click', () => {
   const base = airframe.rotors[selected] || airframe.rotors[airframe.rotors.length - 1] || { pos: [0.2, 0, 0], axis: [0, 0, -1], km: 0.05, max_thrust: 8, tau: 0.04, prop_diameter: 0.25, thrust_exponent: 2 };
@@ -202,7 +203,7 @@ async function loadExport() {
     const cur = r.current[k];
     const same = cur !== null && cur !== undefined && Math.abs(+cur - +v) < 1e-4;
     const f = (x) => (typeof x === 'number' && !Number.isInteger(x)) ? +x.toFixed(4) : x;
-    return `<tr><td>${k}</td><td>${f(v)}</td><td class="${cur == null ? 'muted' : same ? 'ok' : 'diff'}">${cur == null ? '—' : f(cur)}</td><td>${cur == null ? '' : same ? '✓' : '≠'}</td></tr>`;
+    return `<tr><td class="mono">${k}</td><td class="num">${f(v)}</td><td class="${cur == null ? 'muted' : same ? 'ok' : 'diff'}">${cur == null ? '—' : f(cur)}</td><td>${cur == null ? '' : same ? '✓' : '≠'}</td></tr>`;
   }).join('');
   $('#px4-export-status').innerHTML = r.problems.length ? `<div class="problems">⚠ ${r.problems.join('<br>⚠ ')}</div>` : '';
 }
@@ -335,7 +336,7 @@ function applyStatus(s) {
   $('#st-mode').textContent = s.mode.toUpperCase();
   $('#st-conn').textContent = s.connected ? (s.mode === 'hitl' ? s.address : 'PX4 connected') : (s.mode === 'sitl' ? (s.px4_running ? 'PX4 starting…' : 'waiting for PX4 on :4560') : 'no data from ' + s.address);
   $('#st-link .dot').classList.toggle('on', s.connected);
-  $('#st-armed').textContent = s.armed ? 'ARMED' : 'DISARMED';
+  $('#st-armed').textContent = s.armed ? 'Armed' : 'Disarmed';
   $('#st-armed').classList.toggle('armed', s.armed);
   $('#st-flightmode').textContent = s.connected ? s.mode_name + (s.mode === 'hitl' && !s.hil_enabled ? ' · HIL OFF (set SYS_HITL=1)' : '') : '—';
   if (!homeFilled) { $('#home-lat').value = s.home.lat; $('#home-lon').value = s.home.lon; $('#home-alt').value = s.home.alt; homeFilled = true; }
@@ -343,16 +344,23 @@ function applyStatus(s) {
 }
 function applyState(st) {
   scene.updateState(st);
-  $('#st-time').textContent = `t ${st.t.toFixed(1)} s`;
+  $('#st-time').textContent = `${st.t.toFixed(1)} s`;
   $('#st-rtf').textContent = `RTF ${st.rtf ? st.rtf.toFixed(2) : '—'}${st.lockstep_timeouts ? ' · ' + st.lockstep_timeouts + ' waits' : ''}`;
   const [r, p, y] = st.euler.map(deg);
-  $('#st-pose').textContent = `N ${st.pos[0].toFixed(1)} E ${st.pos[1].toFixed(1)} alt ${(-st.pos[2]).toFixed(2)} m · R ${r.toFixed(0)}° P ${p.toFixed(0)}° Y ${y.toFixed(0)}°${st.on_ground ? ' · ground' : ''}`;
+  $('#st-pose').textContent = ` · N ${st.pos[0].toFixed(1)} E ${st.pos[1].toFixed(1)} alt ${(-st.pos[2]).toFixed(2)} m · R ${r.toFixed(0)}° P ${p.toFixed(0)}° Y ${y.toFixed(0)}°${st.on_ground ? ' · on ground' : ''}`;
   if ($('#tab-sim').classList.contains('active')) {
-    $('#rotor-live').innerHTML = st.rotors.map((x, i) => `<div>M${i + 1} cmd ${x.cmd.toFixed(2)} ω ${x.omega.toFixed(2)} <span class="bar" style="width:${Math.round(x.thrust / (airframe.rotors[i]?.max_thrust || 1) * 120)}px"></span> ${x.thrust.toFixed(2)} N</div>`).join('');
+    $('#rotor-live').innerHTML = st.rotors.map((x, i) => `<div><b>M${i + 1}</b> cmd ${x.cmd.toFixed(2)} · ω ${x.omega.toFixed(2)} <span class="bar" style="width:${Math.round(x.thrust / (airframe.rotors[i]?.max_thrust || 1) * 120)}px"></span> ${x.thrust.toFixed(2)} N</div>`).join('');
   }
 }
 const logPre = $('#log-pre');
-function logLine(s) { logPre.textContent += s + '\n'; if (logPre.textContent.length > 40000) logPre.textContent = logPre.textContent.slice(-30000); $('#log').scrollTop = $('#log').scrollHeight; }
+function logLine(s) { logPre.textContent += s + '\n'; if (logPre.textContent.length > 40000) logPre.textContent = logPre.textContent.slice(-30000); const b = $('#log-body'); b.scrollTop = b.scrollHeight; }
+$('#log-toggle').addEventListener('click', (e) => { const c = $('#log').classList.toggle('collapsed'); e.target.textContent = c ? 'Show' : 'Hide'; });
+$('#btn-theme').addEventListener('click', () => {
+  const dark = document.documentElement.dataset.theme !== 'dark';
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  try { localStorage.setItem('airframe-theme', dark ? 'dark' : 'light'); } catch { }
+  scene.setTheme(dark ? 'dark' : 'light');
+});
 
 function connectWs() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');

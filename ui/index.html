@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AIRFRAME SIMULATOR</title>
+<title>Airframe Simulator</title>
 <link rel="stylesheet" href="/static/style.css">
+<script>try { const t = localStorage.getItem('airframe-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { }</script>
 <script type="importmap">
 { "imports": { "three": "/static/vendor/three/three.module.js",
                "three/addons/controls/OrbitControls.js": "/static/vendor/three/OrbitControls.js",
@@ -12,73 +13,83 @@
 </script>
 </head>
 <body>
-<header id="topbar">
-  <div class="brand">AIRFRAME<span>SIM</span></div>
-  <div class="status">
-    <span class="pill" id="st-link"><i class="dot"></i><b id="st-mode">—</b> <span id="st-conn">not connected</span></span>
-    <span class="pill" id="st-armed">DISARMED</span>
-    <span class="pill" id="st-flightmode">—</span>
-    <span class="pill mono" id="st-time">t 0.0 s</span>
-    <span class="pill mono" id="st-rtf">RTF —</span>
-    <span class="pill mono" id="st-pose">—</span>
-  </div>
-  <div class="actions">
-    <button id="btn-reset" title="Put the vehicle back on the ground at the origin">Reset</button>
-    <button id="btn-pause">Pause</button>
-    <button id="btn-follow" class="toggle">Follow</button>
-  </div>
-</header>
+<div class="shell">
+  <div class="main">
+    <section class="panel view">
+      <div class="panel-head">
+        <div class="panel-title">Airframe<span id="title-name"></span></div>
+        <div class="panel-spacer"></div>
+        <button class="pill" id="btn-reset" title="Put the vehicle back on the ground at the origin">Reset</button>
+        <button class="pill" id="btn-pause">Pause</button>
+        <button class="pill toggle" id="btn-follow">Follow</button>
+        <button class="pill theme-btn" id="btn-theme" title="Toggle dark mode">◐</button>
+      </div>
+      <div class="status">
+        <span class="pill st" id="st-link"><i class="dot"></i><b id="st-mode">—</b>&nbsp;<span id="st-conn">not connected</span></span>
+        <span class="pill st" id="st-armed">Disarmed</span>
+        <span class="pill st" id="st-flightmode">—</span>
+        <span class="pill st num" id="st-time">0.0 s</span>
+        <span class="pill st num" id="st-rtf">RTF —</span>
+      </div>
+      <div id="viewport">
+        <canvas id="c"></canvas>
+        <div id="hud">
+          <div id="rotor-readout"></div>
+          <div class="hint"><kbd>W</kbd> move · <kbd>E</kbd> tilt axis · <kbd>Esc</kbd> deselect · click a rotor to select · drag to orbit · scroll to zoom <span id="st-pose" class="num"></span></div>
+        </div>
+      </div>
+    </section>
 
-<main>
-  <div id="viewport">
-    <canvas id="c"></canvas>
-    <div id="hud">
-      <div class="hint">Click a rotor to select · <kbd>W</kbd> move · <kbd>E</kbd> tilt axis · <kbd>Esc</kbd> deselect · drag to orbit · scroll to zoom</div>
-      <div id="rotor-readout"></div>
-    </div>
+    <section class="panel log" id="log">
+      <div class="panel-head">
+        <div class="panel-title">Log</div>
+        <div class="panel-spacer"></div>
+        <button class="pill small" id="log-toggle">Hide</button>
+      </div>
+      <div id="log-body"><pre id="log-pre"></pre></div>
+    </section>
   </div>
 
-  <aside id="panel">
+  <aside class="panel side">
     <nav class="tabs">
-      <button data-tab="airframe" class="active">Airframe</button>
-      <button data-tab="px4">PX4 Export</button>
+      <button data-tab="airframe" class="active">Geometry</button>
+      <button data-tab="px4">PX4 export</button>
       <button data-tab="params">Parameters</button>
-      <button data-tab="sim">Flight / Sim</button>
+      <button data-tab="sim">Flight</button>
     </nav>
+    <div class="panel-body">
 
     <!-- ============================ AIRFRAME ============================ -->
     <section id="tab-airframe" class="tab active">
       <div class="row">
-        <label>Name <input id="af-name" type="text"></label>
+        <label style="flex:1">Name <input id="af-name" type="text"></label>
         <label>Mass kg <input id="af-mass" type="number" step="0.01" min="0.01"></label>
       </div>
       <div class="row">
         <label>Ixx <input id="af-ixx" type="number" step="0.001"></label>
         <label>Iyy <input id="af-iyy" type="number" step="0.001"></label>
         <label>Izz <input id="af-izz" type="number" step="0.001"></label>
-        <button id="af-estimate" class="small" title="Estimate inertia from mass and rotor layout">estimate</button>
+        <button id="af-estimate" class="pill small" title="Estimate inertia from mass and rotor layout">Estimate</button>
       </div>
       <div class="row">
-        <label>Preset
-          <select id="af-preset">
-            <option value="">— load —</option>
-          </select>
+        <label>Load
+          <select id="af-preset"><option value="">Choose…</option></select>
         </label>
-        <label>Save as <input id="af-savename" type="text" placeholder="my_frame"></label>
-        <button id="af-save" class="small">save</button>
+        <label style="flex:1">Save as <input id="af-savename" type="text" placeholder="my_frame"></label>
+        <button id="af-save" class="pill small">Save</button>
       </div>
 
-      <h3>Rotors <small>(PX4 body frame FRD: X forward, Y right, Z down · metres)</small></h3>
+      <h3>Rotors <small>· PX4 body frame FRD: X forward, Y right, Z down, metres</small></h3>
       <div id="rotor-table"></div>
-      <div class="row">
-        <button id="rotor-add" class="small">+ add rotor</button>
-        <button id="rotor-mirror-y" class="small" title="Duplicate the selected rotor mirrored left/right, with opposite spin">mirror L/R</button>
-        <button id="rotor-mirror-x" class="small" title="Duplicate the selected rotor mirrored front/back, with opposite spin">mirror F/B</button>
-        <button id="rotor-apply-all" class="small" title="Copy thrust, tau and prop size of the selected rotor to all rotors">motor → all</button>
+      <div class="row tight">
+        <button id="rotor-add" class="pill small">+ Rotor</button>
+        <button id="rotor-mirror-y" class="pill small" title="Duplicate the selected rotor mirrored left/right, with opposite spin">Mirror L/R</button>
+        <button id="rotor-mirror-x" class="pill small" title="Duplicate the selected rotor mirrored front/back, with opposite spin">Mirror F/B</button>
+        <button id="rotor-apply-all" class="pill small" title="Copy thrust, tau and prop size of the selected rotor to all rotors">Motor → all</button>
       </div>
 
       <details>
-        <summary>Advanced (drag, legs, motor model)</summary>
+        <summary>Drag, body, legs</summary>
         <div class="row">
           <label>Drag x <input id="af-dragx" type="number" step="0.01"></label>
           <label>Drag y <input id="af-dragy" type="number" step="0.01"></label>
@@ -99,13 +110,13 @@
 
     <!-- ============================ PX4 EXPORT ============================ -->
     <section id="tab-px4" class="tab">
-      <p class="help">The rotor geometry above maps directly onto PX4's control-allocation parameters
+      <p class="help">The rotor geometry maps directly onto PX4's control-allocation parameters
         (<code>CA_ROTORn_PX/PY/PZ</code>, <code>CA_ROTORn_AX/AY/AZ</code>, <code>CA_ROTORn_KM</code>) plus the output-function
-        mapping. Push writes them over MAVLink and saves them to the flight controller.</p>
+        mapping. Push writes them over MAVLink, verifies each one and saves them on the flight controller.</p>
       <div class="row">
-        <button id="px4-push" class="primary">Push geometry to PX4</button>
-        <a id="px4-download" href="/api/px4/export.params" download>download .params</a>
-        <button id="px4-refresh" class="small">refresh</button>
+        <button id="px4-push" class="pill primary">Push geometry to PX4</button>
+        <a id="px4-download" class="pill" href="/api/px4/export.params" download>Download .params</a>
+        <button id="px4-refresh" class="pill small">Refresh</button>
       </div>
       <div id="px4-export-status"></div>
       <table id="px4-export-table" class="grid"><thead><tr><th>Parameter</th><th>Export</th><th>On vehicle</th><th></th></tr></thead><tbody></tbody></table>
@@ -114,16 +125,16 @@
     <!-- ============================ PARAMETERS ============================ -->
     <section id="tab-params" class="tab">
       <div class="row">
-        <input id="param-search" type="search" placeholder="search name or description…">
-        <select id="param-group"><option value="">all groups</option></select>
+        <input id="param-search" type="search" placeholder="Search name or description">
+        <select id="param-group" style="width:150px"><option value="">All groups</option></select>
       </div>
-      <div class="row">
-        <button id="param-refresh" class="small">reload from vehicle</button>
-        <button id="param-save" class="small" title="MAV_CMD_PREFLIGHT_STORAGE: write parameters to flash">save to flash</button>
-        <button id="param-meta-fetch" class="small" title="Download parameter descriptions from the vehicle via MAVLink FTP">fetch descriptions</button>
-        <button id="param-reboot" class="small danger">reboot PX4</button>
-        <span id="param-count" class="muted"></span>
+      <div class="row tight">
+        <button id="param-refresh" class="pill small">Reload</button>
+        <button id="param-save" class="pill small" title="MAV_CMD_PREFLIGHT_STORAGE: write parameters to flash">Save to flash</button>
+        <button id="param-meta-fetch" class="pill small" title="Download parameter descriptions from the vehicle via MAVLink FTP">Fetch descriptions</button>
+        <button id="param-reboot" class="pill small danger">Reboot PX4</button>
       </div>
+      <div id="param-count" class="hint" style="margin:6px 0 4px 8px"></div>
       <div id="param-editor" class="editor hidden"></div>
       <div id="param-list"></div>
     </section>
@@ -131,48 +142,47 @@
     <!-- ============================ FLIGHT / SIM ============================ -->
     <section id="tab-sim" class="tab">
       <h3>Vehicle</h3>
-      <div class="row">
-        <button data-cmd="arm">Arm</button>
-        <button data-cmd="disarm">Disarm</button>
-        <button data-cmd="kill" class="danger">Kill</button>
-        <button data-cmd="takeoff">Takeoff</button>
-        <button data-cmd="mode" data-mode="land">Land</button>
-        <button data-cmd="mode" data-mode="hold">Hold</button>
-        <button data-cmd="mode" data-mode="position">Position</button>
-        <button data-cmd="mode" data-mode="rtl">RTL</button>
+      <div class="row tight">
+        <button class="pill small" data-cmd="arm">Arm</button>
+        <button class="pill small" data-cmd="disarm">Disarm</button>
+        <button class="pill small danger" data-cmd="kill">Kill</button>
+        <button class="pill small" data-cmd="takeoff">Takeoff</button>
+        <button class="pill small" data-cmd="mode" data-mode="land">Land</button>
+        <button class="pill small" data-cmd="mode" data-mode="hold">Hold</button>
+        <button class="pill small" data-cmd="mode" data-mode="position">Position</button>
+        <button class="pill small" data-cmd="mode" data-mode="rtl">RTL</button>
       </div>
-      <p class="help">Fly from QGroundControl for anything beyond these. SITL: QGC connects automatically on UDP 14550.
-        HITL: the simulator forwards the Pixhawk's MAVLink to UDP 14550, so disable QGC's serial auto-connect.</p>
+      <p class="help">Fly from QGroundControl for anything beyond these. SITL: QGC connects by itself on UDP 14550.
+        HITL: the simulator forwards the Pixhawk's MAVLink to UDP 14550, so turn off QGC's serial auto-connect.</p>
 
       <h3>Simulation</h3>
       <div class="row">
         <label>Speed <input id="sim-speed" type="number" step="0.5" min="0" value="1" title="0 = as fast as PX4 allows (SITL lockstep)"></label>
-        <label>Noise <input id="sim-noise" type="checkbox" checked></label>
+        <label class="row" style="align-self:end;padding-bottom:6px"><input id="sim-noise" type="checkbox" checked> Sensor noise</label>
       </div>
       <div class="row">
         <label>Wind N <input id="wind-n" type="number" step="0.5" value="0"></label>
         <label>Wind E <input id="wind-e" type="number" step="0.5" value="0"></label>
         <label>Wind D <input id="wind-d" type="number" step="0.5" value="0"></label>
-        <button id="wind-apply" class="small">apply</button>
+        <button id="wind-apply" class="pill small">Apply</button>
       </div>
       <div class="row">
         <label>Home lat <input id="home-lat" type="number" step="0.0001"></label>
-        <label>lon <input id="home-lon" type="number" step="0.0001"></label>
-        <label>alt <input id="home-alt" type="number" step="1"></label>
-        <button id="home-apply" class="small">apply</button>
+        <label>Lon <input id="home-lon" type="number" step="0.0001"></label>
+        <label>Alt <input id="home-alt" type="number" step="1"></label>
+        <button id="home-apply" class="pill small">Apply</button>
       </div>
 
-      <h3>Motor test <small>(bypasses PX4, drives the physics directly)</small></h3>
-      <label class="row"><input id="motor-enable" type="checkbox"> enable override</label>
+      <h3>Motor test <small>· bypasses PX4, drives the physics directly</small></h3>
+      <label class="row"><input id="motor-enable" type="checkbox"> Enable override</label>
       <div id="motor-sliders"></div>
 
       <h3>Live rotors</h3>
       <div id="rotor-live"></div>
     </section>
+    </div>
   </aside>
-</main>
-
-<footer id="log"><pre id="log-pre"></pre></footer>
+</div>
 
 <script type="module" src="/static/app.js"></script>
 </body>

@@ -104,6 +104,7 @@ def build_app(state: AppState) -> FastAPI:
     @app.get("/api/airframes")
     async def list_airframes():
         files = sorted(p.name for p in AIRFRAME_DIR.glob("*.json"))
+        files.sort(key=lambda n: (n != "multirotor_10.json", n))
         return {"presets": ["quad_x", "hex_x"], "files": files}
 
     @app.post("/api/airframe/load")
