@@ -68,8 +68,18 @@ def launch_px4(px4_dir: str, model: str, log, instance: int = 0, rootfs: str | N
     env = dict(os.environ)
     env["PX4_SIM_MODEL"] = model
     env.setdefault("PX4_SIMULATOR", "mavlink")
-    cmd = [str(binary), "-d", "-i", str(instance), "-w", str(rootfs), str(build / "etc")]
-    log(f"[px4] launching: PX4_SIM_MODEL={model} {' '.join(cmd)}")
+    px4_cmd = [str(binary), "-d", "-i", str(instance), "-w", str(rootfs), str(build / "etc")]
+    log(f"[px4] launching: PX4_SIM_MODEL={model} {' '.join(px4_cmd)}")
+    # Watchdog wrapper: PX4 gets SIGINT when this process disappears for any reason (SIGKILL included),
+    # so a crashed or killed simulator never leaves a PX4 instance holding the ports and lock file.
+    watchdog = (
+        'child=""; trap \'[ -n "$child" ] && kill -INT $child 2>/dev/null\' TERM INT; '
+        '"$@" & child=$!; '
+        'while kill -0 $AIRFRAME_SIM_PID 2>/dev/null && kill -0 $child 2>/dev/null; do sleep 0.5; done; '
+        'kill -INT $child 2>/dev/null; wait $child'
+    )
+    env["AIRFRAME_SIM_PID"] = str(os.getpid())
+    cmd = ["/bin/sh", "-c", watchdog, "px4-watchdog"] + px4_cmd
     proc = subprocess.Popen(cmd, cwd=str(rootfs), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1, start_new_session=True)
 
@@ -188,10 +198,27 @@ def main(argv=None) -> int:
         stop_px4()
 
     atexit.register(stop_px4)
+
+    # uvicorn re-raises SIGINT/SIGTERM after its loop exits when it owns the main thread, which would kill us
+    # before cleanup. Run it in a worker thread and keep signal handling here instead.
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=int(port), log_level="warning"))
+    server_thread = threading.Thread(target=server.run, name="uvicorn", daemon=True)
+    server_thread.start()
+    stop_event = threading.Event()
+
+    def on_signal(signum, _frame):
+        log(f"[sim] received signal {signum}, shutting down")
+        stop_event.set()
+
+    signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGTERM, on_signal)
     try:
-        uvicorn.run(app, host=host, port=int(port), log_level="warning")
+        while not stop_event.is_set() and server_thread.is_alive():
+            stop_event.wait(0.5)
     finally:
+        server.should_exit = True
         shutdown()
+        server_thread.join(3)
     return 0
 
 
