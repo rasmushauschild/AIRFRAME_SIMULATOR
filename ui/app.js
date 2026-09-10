@@ -384,3 +384,48 @@ function connectWs() {
 connectWs();
 loadPresetList();
 api('/api/log?since=0').then(lines => lines.forEach(l => logLine(l[1]))).catch(() => { });
+
+
+// ============================================================ resizable panels
+(function () {
+  const side = $('#side'), log = $('#log');
+  let layout = {};
+  try { layout = JSON.parse(localStorage.getItem('airframe-layout') || '{}'); } catch { }
+  if (layout.sideW) side.style.width = layout.sideW + 'px';
+  if (layout.logH) log.style.height = layout.logH + 'px';
+  const save = () => { try { localStorage.setItem('airframe-layout', JSON.stringify(layout)); } catch { } };
+
+  function drag(handle, axis, onMove) {
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('dragging');
+      document.body.classList.add('resizing', axis === 'x' ? 'resizing-x' : 'resizing-y');
+      const start = axis === 'x' ? e.clientX : e.clientY;
+      const move = (ev) => onMove((axis === 'x' ? ev.clientX : ev.clientY) - start);
+      const up = () => {
+        handle.classList.remove('dragging');
+        document.body.classList.remove('resizing', 'resizing-x', 'resizing-y');
+        handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up);
+        save();
+      };
+      handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up);
+      onMove.begin && onMove.begin();
+    });
+  }
+
+  const sideMove = (dx) => {
+    const w = Math.min(window.innerWidth * 0.7, Math.max(380, sideMove.startW - dx));
+    side.style.width = w + 'px'; layout.sideW = Math.round(w);
+  };
+  sideMove.begin = () => { sideMove.startW = side.getBoundingClientRect().width; };
+  drag($('#resize-side'), 'x', sideMove);
+
+  const logMove = (dy) => {
+    if (log.classList.contains('collapsed')) { log.classList.remove('collapsed'); $('#log-toggle').textContent = 'Hide'; }
+    const h = Math.min(window.innerHeight * 0.7, Math.max(48, logMove.startH - dy));
+    log.style.height = h + 'px'; layout.logH = Math.round(h);
+  };
+  logMove.begin = () => { logMove.startH = log.getBoundingClientRect().height; };
+  drag($('#resize-log'), 'y', logMove);
+})();

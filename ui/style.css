@@ -71,9 +71,19 @@ a { color: var(--accent); text-decoration: none; }
 .num { font-variant-numeric: tabular-nums; }
 
 /* ─── Shell ─────────────────────────────────────────── */
-.shell { display: flex; gap: 14px; height: 100%; padding: 18px; }
-.main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-.side { width: 560px; flex: none; display: flex; flex-direction: column; }
+.shell { display: flex; height: 100%; padding: 18px 18px 18px 18px; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.side { width: 560px; flex: none; display: flex; flex-direction: column; min-width: 380px; }
+body.resizing, body.resizing * { cursor: inherit !important; user-select: none; }
+body.resizing-x { cursor: col-resize; } body.resizing-y { cursor: row-resize; }
+
+/* ─── Resizers (the gaps between panels are the handles) ─── */
+.vresizer { width: 14px; flex: none; cursor: col-resize; display: flex; align-items: center; justify-content: center; }
+.vresizer::after { content: ''; height: 44px; width: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0); transition: background 0.15s; }
+.vresizer:hover::after, .vresizer.dragging::after { background: var(--soft-2); }
+.resizer { height: 14px; flex: none; cursor: row-resize; display: flex; align-items: center; justify-content: center; }
+.resizer::after { content: ''; width: 44px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0); transition: background 0.15s; }
+.resizer:hover::after, .resizer.dragging::after { background: var(--soft-2); }
 
 .panel {
   background: var(--frost); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
@@ -215,8 +225,8 @@ button.pill.small { padding: 5px 11px; }
 .bar { display: inline-block; height: 8px; background: var(--accent); border-radius: 4px; }
 
 /* log panel */
-.panel.log { flex: none; height: 132px; transition: height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
-.panel.log.collapsed { height: 48px; }
+.panel.log { flex: none; height: 132px; min-height: 48px; }
+.panel.log.collapsed { height: 48px !important; }
 .panel.log .panel-head { padding: 12px 22px 6px; }
 .panel.log .panel-title { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
 #log-body { flex: 1; min-height: 0; overflow: auto; padding: 0 22px 12px; }
