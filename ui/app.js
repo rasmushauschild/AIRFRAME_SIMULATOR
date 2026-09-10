@@ -124,7 +124,7 @@ const tiltToAxis = (tilt, dir) => {
 function renderRotorTable() {
   const el = $('#rotor-table');
   const rows = airframe.rotors.map((r, i) => rotorRowHtml(i, r)).join('');
-  el.innerHTML = `<table class="grid"><thead><tr><th>#</th><th>X</th><th>Y</th><th>Z</th><th title="tilt from vertical, degrees">Tilt°</th><th title="direction of tilt: 0 = forward, 90 = right">Dir°</th><th>Spin</th><th title="max thrust N">Tmax</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML = `<table class="grid"><thead><tr><th>#</th><th title="position, m">X</th><th>Y</th><th>Z</th><th title="thrust axis (CA_ROTORn_AX/AY/AZ), normalised on entry; up = 0 0 -1">AX</th><th>AY</th><th>AZ</th><th>Spin</th><th title="max thrust N">Tmax</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   el.querySelectorAll('tr[data-i]').forEach(tr => {
     const i = +tr.dataset.i;
     tr.addEventListener('click', (e) => { if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('spin') && !e.target.classList.contains('del')) { selected = i; scene.select(i); renderRotorTable(); renderReadout(); } });
@@ -134,14 +134,15 @@ function renderRotorTable() {
   });
 }
 function rotorRowHtml(i, r) {
-  const [tilt, dir] = axisToTilt(r.axis);
   const ccw = r.km >= 0;
+  const a = r.axis.map(v => +v.toFixed(3));
   return `<tr data-i="${i}" class="${i === selected ? 'selected' : ''}"><td class="idx">${i + 1}</td>
   <td><input type="number" step="0.005" data-k="x" value="${r.pos[0]}"></td>
   <td><input type="number" step="0.005" data-k="y" value="${r.pos[1]}"></td>
   <td><input type="number" step="0.005" data-k="z" value="${r.pos[2]}"></td>
-  <td><input type="number" step="1" data-k="tilt" value="${+tilt.toFixed(1)}"></td>
-  <td><input type="number" step="5" data-k="dir" value="${+dir.toFixed(1)}"></td>
+  <td><input type="number" step="0.05" data-k="ax" value="${a[0]}"></td>
+  <td><input type="number" step="0.05" data-k="ay" value="${a[1]}"></td>
+  <td><input type="number" step="0.05" data-k="az" value="${a[2]}"></td>
   <td><span class="spin ${ccw ? 'ccw' : 'cw'}" title="click to flip (KM=${r.km})">${ccw ? 'CCW' : 'CW'}</span></td>
   <td><input type="number" step="0.5" data-k="tmax" value="${r.max_thrust}"></td>
   <td><button class="del" title="remove rotor">✕</button></td></tr>`;
@@ -150,17 +151,21 @@ function renderRotorRow(i) {
   const tr = document.querySelector(`#rotor-table tr[data-i="${i}"]`);
   if (!tr) return;
   const r = airframe.rotors[i];
-  const [tilt, dir] = axisToTilt(r.axis);
   const set = (k, v) => { const inp = tr.querySelector(`input[data-k="${k}"]`); if (inp && document.activeElement !== inp) inp.value = v; };
-  set('x', r.pos[0]); set('y', r.pos[1]); set('z', r.pos[2]); set('tilt', +tilt.toFixed(1)); set('dir', +dir.toFixed(1));
+  set('x', r.pos[0]); set('y', r.pos[1]); set('z', r.pos[2]);
+  set('ax', +r.axis[0].toFixed(3)); set('ay', +r.axis[1].toFixed(3)); set('az', +r.axis[2].toFixed(3));
 }
 function applyRow(i, tr) {
   const r = airframe.rotors[i];
   const g = (k) => parseFloat(tr.querySelector(`input[data-k="${k}"]`).value);
   r.pos = [g('x'), g('y'), g('z')];
-  r.axis = tiltToAxis(g('tilt'), g('dir'));
+  let ax = [g('ax'), g('ay'), g('az')].map(v => (Number.isFinite(v) ? v : 0));
+  const n = Math.hypot(...ax);
+  ax = n < 1e-6 ? [0, 0, -1] : ax.map(v => +(v / n).toFixed(4));   // unit vector, like PX4 expects
+  r.axis = ax;
   r.max_thrust = g('tmax');
   scene.updateRotorNode(i, r);
+  renderRotorRow(i);
   renderReadout();
   pushAirframe(true);
 }
@@ -170,7 +175,7 @@ function renderReadout() {
   const r = airframe.rotors[selected];
   const [tilt, dir] = axisToTilt(r.axis);
   el.classList.add('show');
-  el.innerHTML = `<b>Motor ${selected + 1}</b> pos [${r.pos.map(v => fmt(v)).join(', ')}] · axis [${r.axis.map(v => fmt(v, 2)).join(', ')}] · tilt ${tilt.toFixed(1)}° dir ${dir.toFixed(0)}° · ${r.km >= 0 ? 'CCW' : 'CW'} · CA_ROTOR${selected}_*`;
+  el.innerHTML = `<b>Motor ${selected + 1}</b> pos [${r.pos.map(v => fmt(v)).join(', ')}] · axis [${r.axis.map(v => fmt(v, 3)).join(', ')}] (${tilt.toFixed(1)}° from vertical) · ${r.km >= 0 ? 'CCW' : 'CW'} · CA_ROTOR${selected}_*`;
 }
 $('#rotor-add').addEventListener('click', () => {
   const base = airframe.rotors[selected] || airframe.rotors[airframe.rotors.length - 1] || { pos: [0.2, 0, 0], axis: [0, 0, -1], km: 0.05, max_thrust: 8, tau: 0.04, prop_diameter: 0.25, thrust_exponent: 2 };

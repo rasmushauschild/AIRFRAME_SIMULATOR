@@ -1,0 +1,218 @@
+{
+  "name": "Multirotor 10",
+  "mass": 3,
+  "inertia": [
+    0.07547,
+    0.12757,
+    0.18478
+  ],
+  "drag_quadratic": [
+    0.1,
+    0.1,
+    0.2
+  ],
+  "drag_angular": [
+    0.005,
+    0.005,
+    0.005
+  ],
+  "body_size": [
+    0.14,
+    0.12,
+    0.06
+  ],
+  "leg_points": [
+    [
+      0.2,
+      0.15,
+      0.2
+    ],
+    [
+      0.2,
+      -0.15,
+      0.2
+    ],
+    [
+      -0.25,
+      0.15,
+      0.2
+    ],
+    [
+      -0.25,
+      -0.15,
+      0.2
+    ]
+  ],
+  "rotors": [
+    {
+      "pos": [
+        -0.3,
+        -0.37,
+        0.14
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    },
+    {
+      "pos": [
+        -0.3,
+        0.37,
+        0.14
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    },
+    {
+      "pos": [
+        -0.26,
+        -0.28,
+        0.09
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    },
+    {
+      "pos": [
+        -0.26,
+        0.28,
+        0.09
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    },
+    {
+      "pos": [
+        -0.2,
+        -0.2,
+        0.04
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    },
+    {
+      "pos": [
+        -0.2,
+        0.2,
+        0.04
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    },
+    {
+      "pos": [
+        -0.16,
+        -0.11,
+        -0.01
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    },
+    {
+      "pos": [
+        -0.16,
+        0.11,
+        -0.01
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    },
+    {
+      "pos": [
+        0.45,
+        0,
+        0.08
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    },
+    {
+      "pos": [
+        0.56,
+        0,
+        0.08
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.05,
+      "max_thrust": 8,
+      "tau": 0.04,
+      "prop_diameter": 0.18,
+      "thrust_exponent": 2
+    }
+  ]
+}
