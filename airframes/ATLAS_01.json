@@ -55,13 +55,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -74,13 +74,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -93,13 +93,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -112,13 +112,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -131,13 +131,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -150,13 +150,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -169,13 +169,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -188,13 +188,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -207,13 +207,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     },
     {
       "pos": [
@@ -226,13 +226,13 @@
         0.0,
         -1.0
       ],
-      "km": -0.05,
+      "km": -0.01,
       "max_thrust": 30,
-      "tau": 0.04,
-      "prop_diameter": 0.18,
+      "tau": 0.12,
+      "prop_diameter": 0.12,
       "thrust_exponent": 2,
-      "kind": "prop",
-      "ram_drag": false
+      "kind": "ducted",
+      "ram_drag": true
     }
   ]
 }
