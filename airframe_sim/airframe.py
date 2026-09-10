@@ -83,6 +83,21 @@ class Airframe:
     rotors: list[Rotor] = field(default_factory=list)
     hover_pitch_deg: float = 0.0   # nose-up pitch of the structural frame in hover; PX4's "level" is this attitude
     px4_overrides: dict = field(default_factory=dict)   # PX4 parameters edited by hand, saved with the airframe
+    landed_pitch_deg: float = 0.0  # nose-up pitch of the structural frame when standing on its feet
+    leg_height: float = 0.2        # feet: distance below the CG (measured along the landed "down")
+    leg_spread: float = 0.2        # feet: half-width / half-length of the foot rectangle
+
+    def generate_legs(self) -> list[list[float]]:
+        """Four feet on a plane perpendicular to gravity when the airframe stands at landed_pitch_deg,
+        expressed in the structural frame."""
+        phi = math.radians(self.landed_pitch_deg)
+        c, s_ = math.cos(phi), math.sin(phi)
+        h, sp = self.leg_height, self.leg_spread
+        pts = []
+        for x, y in ((sp, sp), (sp, -sp), (-sp, sp), (-sp, -sp)):
+            # inverse of the pitch rotation: landed-frame (x, y, h) -> structural
+            pts.append([round(c * x - s_ * h, 4), round(y, 4), round(s_ * x + c * h, 4)])
+        return pts
 
     # ------------------------------------------------------- hover frame
     def hover_rotation(self):

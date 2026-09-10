@@ -109,9 +109,9 @@
           <label>Body H <input id="af-bz" type="number" step="0.01"></label>
         </div>
         <div class="row">
-          <label>Leg height <input id="af-legz" type="number" step="0.01" title="distance from CG down to the ground contact points"></label>
-          <label>Leg spread <input id="af-legxy" type="number" step="0.01"></label>
-          <button id="af-legs-hover" class="pill small" title="Generate four contact points that hold the airframe at its hover pitch on the ground (a tail stand)">Legs for hover stance</button>
+          <label title="Nose-up pitch of the airframe when it stands on its feet. The feet are generated from this angle, the leg height and the spread; the simulator rests the vehicle at this attitude.">Landed pitch° <input id="af-landed" type="number" step="1" min="-90" max="90"></label>
+          <label>Leg height <input id="af-legz" type="number" step="0.01" title="distance from the CG down to the feet, measured along gravity when landed"></label>
+          <label>Leg spread <input id="af-legxy" type="number" step="0.01" title="half-size of the foot rectangle"></label>
         </div>
       </details>
       <div id="af-problems" class="problems"></div>
@@ -155,10 +155,7 @@
         <button class="pill small" data-cmd="mode" data-mode="rtl">RTL</button>
         <button class="pill small" data-cmd="mode" data-mode="mission">Mission</button>
       </div>
-      <div class="row tight">
-        <button class="pill small danger" data-cmd="kill" title="Force disarm immediately, even in the air">Kill</button>
-        <span class="hint" id="mode-hint">The highlighted pill is the mode PX4 reports. With an RC transmitter on, the transmitter's mode switch takes over again.</span>
-      </div>
+      <p class="hint" id="mode-hint">The highlighted pill is the mode PX4 reports. Takeoff is selected automatically once the board is ready. With an RC transmitter on, the transmitter's mode switch takes over again.</p>
       <div id="px4-messages" class="card"></div>
 
       <h3>RC input <small>· what the flight controller receives</small></h3>

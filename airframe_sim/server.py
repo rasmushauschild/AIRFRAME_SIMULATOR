@@ -145,6 +145,7 @@ def build_app(state: AppState) -> FastAPI:
         except Exception as e:
             return JSONResponse({"ok": False, "error": f"invalid airframe: {e}"}, status_code=400)
         keep = bool(body.get("keep_state", True))
+        af.leg_points = af.generate_legs()
         sim.set_airframe(af, keep_state=keep)
         hc = af.hover_check()
         return {"ok": True, "airframe": af.to_dict(), "problems": af.validate() + hc["problems"], "hover": hc}

@@ -198,9 +198,23 @@ class PX4Link:
             return self.actuator_seq > seq_before
 
     # ------------------------------------------------------------------ reader
+    def _guard_serial_writes(self, conn) -> None:
+        """A USB serial write blocks forever while the board reboots (the CDC buffer never drains), which would
+        freeze the sensor loop while it holds the write lock and with it every command on the link. Give the
+        port a write timeout; the senders already catch and throttle the resulting exceptions."""
+        port = getattr(conn, "port", None)
+        if port is not None and hasattr(port, "write_timeout") and getattr(port, "_airframe_guarded", None) is not port:
+            try:
+                port.write_timeout = 0.3
+                port._airframe_guarded = port
+            except Exception:
+                pass
+
     def _read_loop(self, conn, is_hil: bool, is_ctl: bool) -> None:
         name = "simulator link" if (is_hil and not is_ctl) else ("vehicle link" if is_ctl and is_hil else "control link")
         while not self._stop.is_set():
+            if self.mode == "hitl":
+                self._guard_serial_writes(conn)   # re-applied after pymavlink's autoreconnect swaps the port object
             try:
                 msg = conn.recv_match(blocking=True, timeout=0.05)
             except Exception as e:  # serial unplugged etc.

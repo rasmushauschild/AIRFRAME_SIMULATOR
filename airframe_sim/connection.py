@@ -486,6 +486,26 @@ class ConnectionManager:
                 link.restart_estimator()
             except Exception as e:
                 self.log(f"[px4] estimator restart failed: {e}")
+        self._select_default_mode(link)
+
+    def _select_default_mode(self, link, timeout: float = 40.0) -> None:
+        """Default mode is Takeoff: once PX4 reports it could arm for takeoff, request it (retry until accepted)."""
+        from .link import mavlink
+        t0 = time.time()
+        while time.time() - t0 < timeout and self.link is link and link.ctl_connected:
+            summary = None
+            for x in reversed(list(link.recent_events)):
+                if x.get("name") == "commander_arming_check_summary":
+                    summary = dict(zip(x.get("arg_names", []), x.get("args", []))); break
+            if summary and "takeoff" in str(summary.get("can_arm", "")):
+                if ((link.custom_mode >> 16) & 0xFF) == 4 and ((link.custom_mode >> 24) & 0xFF) == 2:
+                    return   # already Takeoff
+                link.send_command_long(mavlink.MAV_CMD_DO_SET_MODE, float(mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED), 4.0, 2.0)
+                time.sleep(2.0)
+                if ((link.custom_mode >> 16) & 0xFF) == 4 and ((link.custom_mode >> 24) & 0xFF) == 2:
+                    self.log("[px4] Takeoff selected")
+                    return
+            time.sleep(1.0)
 
     def restart_estimator(self) -> dict:
         link = self.link
@@ -607,6 +627,7 @@ class ConnectionManager:
                         link.restart_estimator()
                     except Exception as e:
                         self.log(f"[px4] estimator restart failed: {e}")
+                    self._select_default_mode(link)
                 return
             time.sleep(0.5)
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import faulthandler
 import os
 import signal
 import sys
@@ -124,6 +125,9 @@ def main(argv=None) -> int:
 
     signal.signal(signal.SIGINT, on_signal)
     signal.signal(signal.SIGTERM, on_signal)
+    # `kill -USR1 <pid>` appends every thread's Python stack to ~/.airframe_sim/stacks.log (hang diagnosis)
+    _dump = open(os.path.expanduser("~/.airframe_sim/stacks.log"), "a")
+    faulthandler.register(signal.SIGUSR1, file=_dump, all_threads=True)
     try:
         while not stop_event.is_set() and server_thread.is_alive():
             stop_event.wait(0.5)

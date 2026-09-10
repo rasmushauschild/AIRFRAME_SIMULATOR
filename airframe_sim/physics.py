@@ -108,7 +108,7 @@ class RigidBodySim:
         self.t = 0.0
         self.pos = np.zeros(3)
         self.vel = np.zeros(3)
-        pitch = np.radians(float(getattr(self.af, "hover_pitch_deg", 0.0)))   # rest in the hover attitude
+        pitch = np.radians(float(getattr(self.af, "landed_pitch_deg", 0.0)))  # rest standing on its feet
         self.q = q_from_euler(0.0, pitch, yaw)
         self.rates = np.zeros(3)
         self.omega = np.zeros(len(self.af.rotors))

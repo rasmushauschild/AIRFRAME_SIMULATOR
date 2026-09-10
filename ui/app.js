@@ -40,6 +40,7 @@ function pushAirframe(immediate = false) {
   const doPush = async () => {
     try {
       const res = await api('/api/airframe', { airframe, keep_state: true });
+      if (res.airframe && res.airframe.leg_points) { airframe.leg_points = res.airframe.leg_points; scene.setAirframe(airframe); }
       showProblems(res.problems);
       showHover(res.hover);
       markDirty();
@@ -70,10 +71,9 @@ function setAirframe(af) {
   $('#af-hover').value = af.hover_pitch_deg || 0;
   ['dragx', 'dragy', 'dragz'].forEach((k, i) => $('#af-' + k).value = af.drag_quadratic[i]);
   ['bx', 'by', 'bz'].forEach((k, i) => $('#af-' + k).value = af.body_size[i]);
-  if (af.leg_points && af.leg_points.length) {
-    $('#af-legz').value = +af.leg_points[0][2].toFixed(3);
-    $('#af-legxy').value = +Math.abs(af.leg_points[0][0]).toFixed(3);
-  }
+  $('#af-landed').value = af.landed_pitch_deg || 0;
+  $('#af-legz').value = af.leg_height ?? 0.2;
+  $('#af-legxy').value = af.leg_spread ?? 0.2;
   renderRotorTable();
   renderMotorSliders();
   fillMotorCard();
@@ -113,20 +113,13 @@ bindNumber('af-bx', v => airframe.body_size[0] = v);
 bindNumber('af-by', v => airframe.body_size[1] = v);
 bindNumber('af-bz', v => airframe.body_size[2] = v);
 const setLegs = () => {
-  const z = parseFloat($('#af-legz').value), s = parseFloat($('#af-legxy').value);
-  airframe.leg_points = [[s, s, z], [s, -s, z], [-s, s, z], [-s, -s, z]];
+  airframe.landed_pitch_deg = parseFloat($('#af-landed').value) || 0;
+  airframe.leg_height = parseFloat($('#af-legz').value) || 0.2;
+  airframe.leg_spread = parseFloat($('#af-legxy').value) || 0.2;
 };
+bindNumber('af-landed', setLegs);
 bindNumber('af-legz', setLegs);
 bindNumber('af-legxy', setLegs);
-// legs that hold the airframe at its hover pitch on the ground: a flat rectangle under the vehicle in the hover
-// frame, rotated back into the structural frame
-$('#af-legs-hover').addEventListener('click', () => {
-  const phi = (airframe.hover_pitch_deg || 0) * Math.PI / 180, c = Math.cos(phi), sn = Math.sin(phi);
-  const h = parseFloat($('#af-legz').value) || 0.2, sp = parseFloat($('#af-legxy').value) || 0.2;
-  const toStructural = ([x, y, z]) => [c * x - sn * z, y, sn * x + c * z];   // inverse of the hover rotation
-  airframe.leg_points = [[sp, sp, h], [sp, -sp, h], [-sp, sp, h], [-sp, -sp, h]].map(toStructural).map(v => v.map(x => +x.toFixed(3)));
-  scene.setAirframe(airframe); pushAirframe(true); api('/api/sim/reset', {});
-});
 $('#af-estimate').addEventListener('click', async () => {
   await api('/api/airframe', { airframe, keep_state: true });
   const r = await api('/api/airframe/estimate_inertia', {});
