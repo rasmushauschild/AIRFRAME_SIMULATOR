@@ -281,7 +281,8 @@ function updateFooter() {
   armBtn.textContent = status.armed ? 'Kill' : 'Arm';
   armBtn.title = status.armed ? 'Force disarm immediately (motors stop, even in the air)' : 'Arm the vehicle';
   armBtn.classList.toggle('armed', !!status.armed);
-  armBtn.disabled = !status.ctl_connected;
+  armBtn.disabled = !status.ctl_connected || (!status.armed && !status.arm_ready);
+  if (!status.armed && status.ctl_connected && !status.arm_ready) armBtn.title = 'Not armable yet: ' + (status.arm_block_reason || 'estimator not ready');
   const upd = $('#btn-update');
   upd.disabled = !status.ctl_connected || !!status.armed;
   upd.title = status.armed ? 'Disarm first: PX4 rebuilds its allocation when these parameters change' :

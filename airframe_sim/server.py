@@ -99,6 +99,18 @@ def build_app(state: AppState) -> FastAPI:
         s["conn_mode"] = state.conn.mode
         s["conn_error"] = state.conn.error
         s["flashing"] = state.conn.firmware_job.running() and state.conn.firmware_job.action == "upload"
+        # arm gating: PX4's last arming-check summary must report no system errors and a usable position
+        ready, why = False, "waiting for PX4's arming check report"
+        for x in reversed(list(getattr(state.link, "recent_events", []) or [])):
+            if x.get("name") == "commander_arming_check_summary":
+                d = dict(zip(x.get("arg_names", []), x.get("args", [])))
+                can = str(d.get("can_arm", ""))
+                err = d.get("error", 0)
+                ready = (err in (0, "0", None)) and ("takeoff" in can or "loiter" in can or "stab" in can)
+                why = "" if ready else ("health errors: " + str(err).replace("|", ", ") if err not in (0, "0", None) else "estimator not ready")
+                break
+        s["arm_ready"] = bool(s["ctl_connected"]) and (ready or bool(s["armed"]))
+        s["arm_block_reason"] = why
         s["px4_ports"] = [p["device"] for p in state.conn.list_ports_cached() if p["likely_px4"]]
         s["meta_loaded"] = len(state.meta)
         s["meta_source"] = state.meta_source
