@@ -28,6 +28,7 @@ from .sensors import Home
 from .simulator import Simulator
 from .server import AppState, build_app
 from . import param_meta
+from .events import EventDecoder
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 
@@ -79,6 +80,9 @@ def main(argv=None) -> int:
     simulator.start()
 
     conn = ConnectionManager(simulator, args, log)
+    conn.event_decoder = EventDecoder()
+    n_ev = conn.event_decoder.load_local(args.px4_dir)
+    log(f"[events] metadata: {n_ev} event definitions from {conn.event_decoder.source or 'nowhere'}")
     state = AppState(simulator, conn, args, log_buffer, log)
     state.meta, state.meta_source = param_meta.load_local(args.px4_dir, args.param_meta)
     log(f"[params] metadata: {len(state.meta)} entries from {state.meta_source or 'nowhere (use Fetch descriptions)'}")

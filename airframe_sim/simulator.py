@@ -118,7 +118,11 @@ class Simulator:
                 t_us = self.time_usec
                 sensor = self.sensors.hil_sensor(self.sim, t_us)
                 gps = self.sensors.hil_gps(self.sim, t_us) if self.step_count % self.gps_every == 0 else None
-                state = self.sensors.hil_state_quaternion(self.sim, t_us) if self.step_count % self.state_every == 0 else None
+                # HIL_STATE_QUATERNION is ground truth for SITL logging only. On real hardware PX4's mavlink receiver
+                # feeds its accel/gyro fields into the *same* simulated IMU as HIL_SENSOR (with a different unit
+                # convention), which corrupts the estimator, so it is never sent in HITL.
+                send_state = link.mode == "sitl" and self.step_count % self.state_every == 0
+                state = self.sensors.hil_state_quaternion(self.sim, t_us) if send_state else None
             self.step_count += 1
 
             # 2. sensors -> PX4

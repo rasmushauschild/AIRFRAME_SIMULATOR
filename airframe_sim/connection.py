@@ -216,6 +216,7 @@ class ConnectionManager:
         self.error: str | None = None
         self.busy = False
         self.on_params: Callable[[], None] | None = None   # called after a fresh parameter download
+        self.event_decoder = None                           # events.EventDecoder shared by all links
         self._lock = threading.RLock()
         self.firmware_job = FirmwareJob(log)
         self._params_session = 0
@@ -295,6 +296,7 @@ class ConnectionManager:
             return self.status()
 
     def _install(self, link: PX4Link, mode: str) -> None:
+        link.event_decoder = self.event_decoder
         self.link = link
         self.mode = mode
         self.serial = link.address if mode == "hitl" else None

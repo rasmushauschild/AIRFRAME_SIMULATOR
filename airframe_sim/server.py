@@ -204,6 +204,32 @@ def build_app(state: AppState) -> FastAPI:
     async def firmware_upload(body: dict | None = None):
         return await run_in_threadpool(state.conn.upload_firmware, (body or {}).get("target"))
 
+    @app.post("/api/px4/shell")
+    async def px4_shell(body: dict):
+        cmd = str(body.get("command", "")).strip()
+        if not cmd:
+            return JSONResponse({"ok": False, "error": "command required"}, status_code=400)
+        if not link.ctl_connected:
+            return JSONResponse({"ok": False, "error": "PX4 not connected"}, status_code=409)
+        out = await run_in_threadpool(link.shell, cmd, float(body.get("timeout", 3.0)))
+        return {"ok": True, "output": out}
+
+    @app.get("/api/events")
+    async def get_events():
+        return {"source": state.conn.event_decoder.source if state.conn.event_decoder else "",
+                "events": list(link.recent_events) if hasattr(state.link, "recent_events") else []}
+
+    @app.post("/api/events/meta/fetch")
+    async def fetch_events_meta():
+        if not link.ctl_connected:
+            return JSONResponse({"ok": False, "error": "PX4 control link not connected"}, status_code=409)
+        local, msg = await run_in_threadpool(param_meta.fetch_extra, link, "all_events.json.xz", state.log)
+        if local is None:
+            return JSONResponse({"ok": False, "error": msg}, status_code=500)
+        from .events import _read_json
+        n = state.conn.event_decoder.load(_read_json(local), str(local))
+        return {"ok": True, "count": n}
+
     @app.get("/api/firmware")
     async def firmware_status():
         b = state.conn.detected_board()

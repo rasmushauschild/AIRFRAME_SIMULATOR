@@ -83,6 +83,15 @@ class PX4Link:
 
         self.statustext = deque(maxlen=200)
         self.firmware: dict = {}      # from AUTOPILOT_VERSION
+        self.rx_types: dict[str, int] = {}
+        self.last_ack: dict = {}
+        self.event_decoder = None            # events.EventDecoder, set by the app
+        self.board_imu: dict = {}            # what the autopilot says its IMU sees (HIGHRES_IMU)
+        self.board_sys: dict = {}            # SYS_STATUS: comm drop rate etc.
+        self._shell_buf = bytearray()
+        self._shell_lock = threading.Lock()
+        self.recent_events = deque(maxlen=60)
+        self._last_event_text: dict[str, float] = {}
         self.rx_count = 0
         self.last_rx_time = 0.0
         self._qgc_sock = None
@@ -102,7 +111,9 @@ class PX4Link:
                                                   dialect="common")
         else:
             self.log(f"[link] HITL: opening serial {self.address} @ {self.baud}")
-            self.conn = mavutil.mavlink_connection(self.address, baud=self.baud, source_system=1, source_component=51,
+            # Speak as a GCS (sysid 255): PX4 then counts us as the ground station (no "GCS not connected"
+            # arming complaint) and accepts commands the same way it does from QGroundControl.
+            self.conn = mavutil.mavlink_connection(self.address, baud=self.baud, source_system=255, source_component=190,
                                                    dialect="common", autoreconnect=True)
             if self.qgc_proxy:
                 host, port = self.qgc_proxy.rsplit(":", 1)
@@ -157,7 +168,8 @@ class PX4Link:
 
     def send_heartbeat(self) -> None:
         with self._write_lock:
-            self.conn.mav.heartbeat_send(mavlink.MAV_TYPE_GENERIC, mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)
+            self.conn.mav.heartbeat_send(mavlink.MAV_TYPE_GCS if self.mode == "hitl" else mavlink.MAV_TYPE_GENERIC,
+                                         mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)
         if self.ctl is not self.conn:
             with self._ctl_lock:
                 self.ctl.mav.heartbeat_send(mavlink.MAV_TYPE_GCS, mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)
@@ -211,6 +223,7 @@ class PX4Link:
                     self.target_system = msg.get_srcSystem()
                     self.log(f"[link] PX4 {name} up (sysid {msg.get_srcSystem()} compid {msg.get_srcComponent()})")
             t = msg.get_type()
+            self.rx_types[t] = self.rx_types.get(t, 0) + 1
             if t == "HIL_ACTUATOR_CONTROLS":
                 with self._act_cond:
                     self.actuators = list(msg.controls)
@@ -228,6 +241,26 @@ class PX4Link:
                     self.mav_type = msg.type
             elif t == "PARAM_VALUE":
                 self._handle_param_value(msg)
+            elif t == "UNKNOWN_410":         # EVENT: PX4's arming/health/mode messages (pymavlink lacks it)
+                self._handle_event(msg)
+            elif t == "SERIAL_CONTROL":
+                if msg.device == mavlink.SERIAL_CONTROL_DEV_SHELL:
+                    with self._shell_lock:
+                        self._shell_buf += bytes(msg.data[:msg.count])
+            elif t == "SYS_STATUS":
+                self.board_sys = {"drop_rate_comm": msg.drop_rate_comm, "errors_comm": msg.errors_comm, "load": msg.load,
+                                  "t": time.time()}
+            elif t == "HIGHRES_IMU":
+                self.board_imu = {"xacc": msg.xacc, "yacc": msg.yacc, "zacc": msg.zacc, "xgyro": msg.xgyro,
+                                  "xmag": msg.xmag, "zmag": msg.zmag, "abs_pressure": msg.abs_pressure,
+                                  "fields_updated": msg.fields_updated, "t": time.time()}
+            elif t == "COMMAND_ACK":
+                names = {0: "accepted", 1: "temporarily rejected", 2: "denied", 3: "unsupported", 4: "failed",
+                         5: "in progress", 6: "cancelled"}
+                cmds = {400: "arm/disarm", 176: "set mode", 22: "takeoff", 21: "land", 246: "reboot", 245: "save params"}
+                self.last_ack = {"command": msg.command, "result": msg.result, "t": time.time()}
+                if msg.result != 0:
+                    self.log(f"[px4] command {cmds.get(msg.command, msg.command)} {names.get(msg.result, msg.result)}")
             elif t == "AUTOPILOT_VERSION":
                 v = msg.flight_sw_version
                 ver = f"{(v >> 24) & 0xFF}.{(v >> 16) & 0xFF}.{(v >> 8) & 0xFF}"
@@ -248,6 +281,36 @@ class PX4Link:
                     self._qgc_sock.sendto(msg.get_msgbuf(), self._qgc_target)
                 except OSError:
                     pass
+
+    def _handle_event(self, msg) -> None:
+        dec = self.event_decoder
+        if dec is None:
+            return
+        try:
+            raw = bytes(msg.get_msgbuf())
+            ev = dec.parse_message(raw)
+            f = dec.format(ev) if ev else None
+        except Exception as e:
+            self._event_debug(f"decode error {e}")
+            return
+        if not f:
+            self._event_debug(f"unknown event id {ev['id'] if ev else '?'} seq {ev['seq'] if ev else '?'} raw {raw[:24].hex()}")
+            return
+        f["t"] = time.time()
+        self.recent_events.append(f)
+        if f["level"] <= 6 and f["group"] != "protocol":
+            key = f["text"]
+            if time.time() - self._last_event_text.get(key, 0.0) > 5.0:
+                self._last_event_text[key] = time.time()
+                tag = {0: "EMERG", 1: "ALERT", 2: "CRIT", 3: "ERROR", 4: "WARN", 5: "NOTICE", 6: "INFO"}.get(f["level"], "")
+                self.log(f"[px4] {tag} {f['text']}".replace("  ", " "))
+
+    _event_debug_count = 0
+
+    def _event_debug(self, text: str) -> None:
+        if self._event_debug_count < 5:
+            self._event_debug_count += 1
+            self.log(f"[events] {text}")
 
     def _poll_qgc(self) -> None:
         if self._qgc_sock is None:
@@ -370,6 +433,31 @@ class PX4Link:
         return results
 
     # --------------------------------------------------------------- commands
+    def shell(self, command: str, timeout: float = 3.0, idle: float = 0.4) -> str:
+        """Run a NuttX/PX4 shell command over MAVLink SERIAL_CONTROL and return its output."""
+        with self._shell_lock:
+            self._shell_buf.clear()
+        data = (command.strip() + "\n").encode()
+        flags = mavlink.SERIAL_CONTROL_FLAG_RESPOND | mavlink.SERIAL_CONTROL_FLAG_EXCLUSIVE | mavlink.SERIAL_CONTROL_FLAG_MULTI
+        for i in range(0, max(len(data), 1), 70):
+            chunk = data[i:i + 70]
+            with self._ctl_lock:
+                self.ctl.mav.serial_control_send(mavlink.SERIAL_CONTROL_DEV_SHELL, flags, 0, 0, len(chunk),
+                                                 chunk + b"\x00" * (70 - len(chunk)))
+        t0 = time.time()
+        last_len, last_change = 0, time.time()
+        while time.time() - t0 < timeout:
+            time.sleep(0.05)
+            with self._shell_lock:
+                n = len(self._shell_buf)
+            if n != last_len:
+                last_len, last_change = n, time.time()
+            elif n and time.time() - last_change > idle:
+                break
+        with self._shell_lock:
+            out = bytes(self._shell_buf).decode(errors="replace")
+        return out.replace("\r", "")
+
     def request_autopilot_version(self) -> None:
         self.send_command_long(mavlink.MAV_CMD_REQUEST_MESSAGE, float(mavlink.MAVLINK_MSG_ID_AUTOPILOT_VERSION))
 
@@ -395,5 +483,10 @@ class PX4Link:
             "param_count": self.param_count,
             "params_loaded": sum(1 for v in self.params.values() if v["index"] < self.param_count),
             "actuator_seq": self.actuator_seq,
+            "rx_types": dict(sorted(self.rx_types.items(), key=lambda kv: -kv[1])[:25]),
+            "events": [e for e in list(self.recent_events)[-12:]],
+            "board_imu": self.board_imu,
+            "board_sys": self.board_sys,
+            "last_ack": self.last_ack,
             "qgc_proxy": self.qgc_proxy,
         }

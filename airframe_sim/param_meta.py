@@ -87,22 +87,36 @@ def load_local(px4_dir: str | None, explicit: str | None = None) -> tuple[dict[s
         return {}, f"failed to read {p}: {e}"
 
 
-def fetch_from_vehicle(link, log=print) -> tuple[dict[str, dict], str]:
-    """Download /etc/extras/parameters.json.xz via MAVLink FTP using pymavlink's mavftp."""
+def fetch_extra(link, name: str, log=print) -> tuple[Path | None, str]:
+    """Download /etc/extras/<name> from the vehicle via MAVLink FTP into the cache dir."""
     try:
         from pymavlink import mavftp
     except Exception as e:
-        return {}, f"pymavlink mavftp unavailable: {e}"
+        return None, f"pymavlink mavftp unavailable: {e}"
+    if getattr(link, "mode", "") == "hitl":
+        return None, ("MAVLink FTP over the shared USB link is not supported while the simulation is running; "
+                      "metadata is taken from the local PX4 build instead (build/<target>/parameters.json, events/all_events.json)")
     CACHE_DIR.mkdir(exist_ok=True)
-    local = CACHE_DIR / "parameters.json.xz"
+    local = CACHE_DIR / name
     try:
         ftp = mavftp.MAVFTP(link.ctl, target_system=link.target_system, target_component=link.target_component)
-        ret = ftp.cmd_get(["/etc/extras/parameters.json.xz", str(local)])
+        ret = ftp.cmd_get([f"/etc/extras/{name}", str(local)])
         ftp.process_ftp_reply("OpenFileRO", timeout=60)
         if ret is not None and hasattr(ret, "error_code") and ret.error_code != 0:
-            return {}, f"ftp error {ret.display_message()}"
+            return None, f"ftp error {ret.display_message()}"
         if not local.is_file() or local.stat().st_size == 0:
-            return {}, "ftp download produced no file"
+            return None, "ftp download produced no file"
+        return local, str(local)
+    except Exception as e:
+        return None, f"ftp download failed: {e}"
+
+
+def fetch_from_vehicle(link, log=print) -> tuple[dict[str, dict], str]:
+    """Download /etc/extras/parameters.json.xz via MAVLink FTP."""
+    local, msg = fetch_extra(link, "parameters.json.xz", log)
+    if local is None:
+        return {}, msg
+    try:
         return flatten(_read_json(local)), str(local)
     except Exception as e:
-        return {}, f"ftp download failed: {e}"
+        return {}, f"failed to read {local}: {e}"
