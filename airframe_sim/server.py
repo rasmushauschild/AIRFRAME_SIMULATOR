@@ -98,6 +98,7 @@ def build_app(state: AppState) -> FastAPI:
         s["px4_running"] = state.conn.px4_running()
         s["conn_mode"] = state.conn.mode
         s["conn_error"] = state.conn.error
+        s["flashing"] = state.conn.firmware_job.running() and state.conn.firmware_job.action == "upload"
         s["px4_ports"] = [p["device"] for p in state.conn.list_ports_cached() if p["likely_px4"]]
         s["meta_loaded"] = len(state.meta)
         s["meta_source"] = state.meta_source

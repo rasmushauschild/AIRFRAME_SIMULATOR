@@ -352,7 +352,8 @@ function applyStatus(s) {
     : (s.mode === 'sitl' ? (s.px4_running ? 'PX4 starting…' : 'waiting for PX4') : 'no data from ' + s.address.replace('/dev/', ''));
   $('#st-link .dot').classList.toggle('on', s.connected);
   const det = $('#st-detected');
-  const showDet = s.mode !== 'hitl' && s.px4_ports && s.px4_ports.length > 0;
+  const showDet = !s.flashing && s.mode !== 'hitl' && s.px4_ports && s.px4_ports.length > 0;
+  if (s.flashing) { $('#st-mode').textContent = 'Pixhawk'; $('#st-conn').textContent = 'flashing firmware…'; }
   det.classList.toggle('hidden', !showDet); det.classList.toggle('blink', showDet);
   if (showDet) det.textContent = `Pixhawk on ${s.px4_ports[0].replace('/dev/', '')} · connect`;
   $('#st-armed').textContent = s.armed ? 'Armed' : 'Disarmed';

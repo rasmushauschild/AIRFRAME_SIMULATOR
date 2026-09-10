@@ -123,13 +123,24 @@ class PX4Link:
             t.start()
 
     def close(self) -> None:
+        """Stop the readers and release the port. pymavlink's serial autoreconnect would otherwise reopen the
+        device from the reader thread right after close(), which keeps it busy for e.g. a firmware upload."""
         self._stop.set()
-        for c in {id(self.conn): self.conn, id(self.ctl): self.ctl}.values():
+        conns = list({id(self.conn): self.conn, id(self.ctl): self.ctl}.values())
+        for c in conns:
+            if c is not None and hasattr(c, "autoreconnect"):
+                c.autoreconnect = False
+        for t in self._readers:
+            if t.is_alive() and t is not threading.current_thread():
+                t.join(1.5)
+        for c in conns:
             try:
                 if c:
                     c.close()
             except Exception:
                 pass
+        self.connected = False
+        self.ctl_connected = False
 
     # ------------------------------------------------------------------- write
     def send_hil_sensor(self, s: dict) -> None:

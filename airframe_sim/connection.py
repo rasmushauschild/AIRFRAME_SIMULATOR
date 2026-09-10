@@ -156,10 +156,17 @@ class FirmwareJob:
 
         def pump():
             last = ""
+            repeats = 0
             for line in self.proc.stdout:
                 line = ansi.sub("", line).rstrip()
                 if not line:
                     continue
+                if line == last:
+                    repeats += 1
+                    if repeats == 3:
+                        self.log("[firmware] (repeating…)")
+                    continue
+                repeats = 0
                 last = line
                 # ninja progress lines are very chatty; keep every 25th plus anything that is not a build step
                 if line.startswith("[") and "/" in line[:12] and "]" in line[:14]:
@@ -176,6 +183,18 @@ class FirmwareJob:
             self.log(f"[firmware] {self.action} {'finished' if code == 0 else 'FAILED'} (exit {code})")
 
         threading.Thread(target=pump, daemon=True).start()
+        if action == "upload":
+            def watchdog():
+                deadline = time.time() + 240
+                while self.running() and time.time() < deadline:
+                    time.sleep(1.0)
+                if self.running():
+                    self.log("[firmware] upload took too long, giving up (is the port free? unplug/replug the board and retry)")
+                    try:
+                        os.killpg(self.proc.pid, signal.SIGTERM)
+                    except Exception:
+                        pass
+            threading.Thread(target=watchdog, daemon=True).start()
         return {"ok": True}
 
     def status(self) -> dict:
@@ -233,6 +252,9 @@ class ConnectionManager:
                 self.busy = False
 
     def connect_hitl(self, serial: str | None = None, baud: int | None = None) -> dict:
+        if self.firmware_job.running() and self.firmware_job.action == "upload":
+            self.error = "firmware upload in progress; the link reconnects by itself when it is done"
+            return self.status()
         with self._lock:
             self.busy = True
             try:
@@ -362,11 +384,12 @@ class ConnectionManager:
         with self._lock:
             was_hitl = self.mode == "hitl"
             serial = self.serial
+            ref = self.board_release_tag()
             if was_hitl:
                 self._close_link()
-                time.sleep(0.5)
+                time.sleep(1.0)   # let the OS release the device
         venv_bin = str(PROJECT_DIR / ".venv" / "bin")
-        r = self.firmware_job.start(target, "upload", self.args.px4_dir, venv_bin, ref=self.board_release_tag())
+        r = self.firmware_job.start(target, "upload", self.args.px4_dir, venv_bin, ref=ref)
         if r.get("ok") and was_hitl:
             def reconnect():
                 while self.firmware_job.running():
@@ -472,6 +495,7 @@ class ConnectionManager:
             "error": self.error,
             "busy": self.busy,
             "px4_running": self.px4_running(),
+            "flashing": self.firmware_job.running() and self.firmware_job.action == "upload",
             "px4_instance": self.px4_instance,
             "ports": self.list_ports_cached(0.5),
             "qgc": self.args.qgc,
