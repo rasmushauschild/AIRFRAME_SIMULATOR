@@ -424,6 +424,7 @@ class ConnectionManager:
         if terminated:
             self.log("[px4] recover: commander is in termination/failsafe, rebooting the board")
             link.reboot()
+            self._after_reboot(link)
             steps.append("rebooted (termination/failsafe)")
         else:
             time.sleep(1.5)
@@ -445,6 +446,7 @@ class ConnectionManager:
         steps.append("sim reset")
         if self.mode == "hitl" and link is not None and link.ctl_connected:
             link.reboot()
+            self._after_reboot(link)
             steps.append("board rebooted")
         elif self.mode == "sitl":
             with self._lock:
@@ -570,18 +572,30 @@ class ConnectionManager:
             self._ports_cache = (time.time(), ports)
         return ports
 
-    def _post_boot_ekf_restart(self, link, session: int) -> None:
+    def _post_boot_ekf_restart(self, link, session: int | None = None) -> None:
+        """After a (re)boot: wait for HIL data to flow again, give the EKF a few seconds, then restart it once."""
+        seq0 = link.actuator_seq
         t0 = time.time()
-        while time.time() - t0 < 30 and self.link is link and self._params_session == session:
-            if link.hil_enabled and link.actuator_seq > 200:
+        while time.time() - t0 < 60 and self.link is link and (session is None or self._params_session == session):
+            if link.hil_enabled and link.actuator_seq - seq0 > 300 and time.time() - link.ctl_rx_time < 2.0:
                 time.sleep(5.0)
-                if self.link is link and self._params_session == session:
+                if self.link is link:
                     try:
                         link.restart_estimator()
                     except Exception as e:
                         self.log(f"[px4] estimator restart failed: {e}")
                 return
             time.sleep(0.5)
+
+    def _after_reboot(self, link) -> None:
+        """Explicitly schedule the post-boot estimator restart for a reboot we triggered ourselves
+        (the link watcher only catches it if the control link visibly drops)."""
+        def run():
+            t0 = time.time()
+            while time.time() - t0 < 20 and time.time() - link.ctl_rx_time < 1.5:
+                time.sleep(0.5)                       # wait for the board to actually go away
+            self._post_boot_ekf_restart(link, None)
+        threading.Thread(target=run, daemon=True).start()
 
     # ------------------------------------------------------------ status
     def status(self) -> dict:
