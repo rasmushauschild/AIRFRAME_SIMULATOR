@@ -78,7 +78,7 @@ function setAirframe(af) {
   renderMotorSliders();
   fillMotorCard();
   airframe.px4_overrides = airframe.px4_overrides || {};
-  renderOverrides();
+  loadExport();          // fills the edited/affected-parameters section (needs the server's export view)
 }
 const KIND_DEFAULTS = { prop: { km: 0.05, tau: 0.04, prop_diameter: 0.25, thrust_exponent: 2, ram_drag: false },
                         ducted: { km: 0.01, tau: 0.12, prop_diameter: 0.12, thrust_exponent: 2, ram_drag: true } };
@@ -363,6 +363,7 @@ async function loadParams() {
   const r = await api('/api/params');
   params = r.params || {};
   paramsLoaded = Object.keys(params).length > 0;
+  loadExport();          // vehicle values are now known: refresh the ✓/≠ marks
   $('#param-count').textContent = `${Object.keys(params).length}/${r.count} loaded · ${Object.keys(meta).length} described`;
   renderParams();
 }
