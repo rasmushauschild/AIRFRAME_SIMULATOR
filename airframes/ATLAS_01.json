@@ -56,7 +56,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2
@@ -73,7 +73,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2
@@ -90,7 +90,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2
@@ -107,7 +107,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2
@@ -124,7 +124,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2
@@ -141,7 +141,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2
@@ -158,7 +158,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2
@@ -175,7 +175,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2
@@ -192,7 +192,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2
@@ -209,7 +209,7 @@
         -1.0
       ],
       "km": -0.05,
-      "max_thrust": 8,
+      "max_thrust": 30,
       "tau": 0.04,
       "prop_diameter": 0.18,
       "thrust_exponent": 2

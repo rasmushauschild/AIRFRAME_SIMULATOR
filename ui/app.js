@@ -40,6 +40,7 @@ function pushAirframe(immediate = false) {
     try {
       const res = await api('/api/airframe', { airframe, keep_state: true });
       showProblems(res.problems);
+      markDirty();
     } catch (e) { logLine('[ui] airframe rejected: ' + e.message); }
   };
   if (immediate) doPush(); else pushTimer = setTimeout(doPush, 120);
@@ -212,19 +213,24 @@ async function loadExport() {
   $('#px4-export-status').innerHTML = r.problems.length ? `<div class="problems">⚠ ${r.problems.join('<br>⚠ ')}</div>` : '';
 }
 $('#px4-refresh').addEventListener('click', loadExport);
-$('#px4-push').addEventListener('click', async () => {
-  const st = $('#px4-export-status');
-  st.innerHTML = '<span class="muted">pushing…</span>';
+async function pushToPX4(statusEl, short = false) {
+  statusEl.innerHTML = '<span class="muted">Pushing…</span>';
   try {
     await api('/api/airframe', { airframe, keep_state: true });
     const r = await api('/api/px4/push', { save: true });
     const failed = r.results.filter(x => !x.ok);
-    st.innerHTML = r.ok ? `<span class="ok">✓ ${r.results.length} parameters written and saved to the flight controller.</span>`
+    statusEl.innerHTML = r.ok
+      ? `<span class="ok">✓ ${r.results.length} parameters ${short ? 'on PX4' : 'written and saved to the flight controller'}</span>`
       : `<span class="err">${failed.length} failed: ${failed.map(f => f.name + ' (' + f.error + ')').join(', ')}</span>`;
-    if (r.missing && r.missing.length) st.innerHTML += `<div class="muted">not present in this firmware: ${r.missing.join(', ')}</div>`;
-    await loadExport();
-  } catch (e) { st.innerHTML = `<span class="err">${e.message}</span>`; }
-});
+    if (!short && r.missing && r.missing.length) statusEl.innerHTML += `<div class="muted">not present in this firmware: ${r.missing.join(', ')}</div>`;
+    geometryDirty = false;
+    if ($('#tab-px4').classList.contains('active')) await loadExport();
+  } catch (e) { statusEl.innerHTML = `<span class="err">${e.message}</span>`; }
+}
+$('#px4-push').addEventListener('click', () => pushToPX4($('#px4-export-status')));
+$('#geo-push').addEventListener('click', () => pushToPX4($('#geo-push-status'), true));
+let geometryDirty = false;
+function markDirty() { geometryDirty = true; $('#geo-push-status').innerHTML = '<span class="warn">Changed since last push</span>'; }
 
 // ============================================================ parameters
 let paramsLoaded = false;
