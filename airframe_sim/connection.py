@@ -431,6 +431,37 @@ class ConnectionManager:
             steps.append("estimator restarted")
         return {"ok": True, "steps": steps}
 
+    def reset_all(self) -> dict:
+        """Full clean start: force-disarm, vehicle back on the ground, and PX4 rebooted (HITL) or relaunched (SITL)."""
+        link = self.link
+        steps = []
+        if link is not None and link.ctl_connected:
+            from .link import mavlink
+            if link.armed:
+                link.send_command_long(mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0.0, 21196.0)
+                steps.append("force-disarmed")
+                time.sleep(1.0)
+        self.sim.reset()
+        steps.append("sim reset")
+        if self.mode == "hitl" and link is not None and link.ctl_connected:
+            link.reboot()
+            steps.append("board rebooted")
+        elif self.mode == "sitl":
+            with self._lock:
+                if self.px4_running():
+                    self.stop_px4()
+                    steps.append("PX4 SITL stopped")
+                    time.sleep(1.0)
+                if self.args.launch_px4:
+                    try:
+                        self.px4_process = launch_px4(self.args.px4_dir, self.args.px4_model, self.log,
+                                                      instance=self.px4_instance or 0, rootfs=self.args.px4_rootfs)
+                        steps.append("PX4 SITL relaunched")
+                    except RuntimeError as e:
+                        self.error = str(e)
+                        steps.append(f"relaunch failed: {e}")
+        return {"ok": True, "steps": steps}
+
     def restart_estimator(self) -> dict:
         link = self.link
         if link is None or not link.ctl_connected:

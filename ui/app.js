@@ -379,14 +379,14 @@ $('#param-meta-fetch').addEventListener('click', async () => {
 // ============================================================ flight / sim
 $$('#tab-sim button[data-cmd]').forEach(b => b.addEventListener('click', () =>
   api('/api/px4/command', { command: b.dataset.cmd, mode: b.dataset.mode, force: b.dataset.cmd === 'kill' }).catch(e => logLine('[ui] ' + e.message))));
-async function recover(btn) {
-  const label = btn.textContent; btn.textContent = 'Recovering…'; btn.disabled = true;
-  try { const r = await api('/api/px4/recover', {}); logLine('[ui] recover: ' + (r.steps || []).join(', ')); }
-  catch (e) { logLine('[ui] recover failed: ' + e.message); }
+async function recover(btn, full) {
+  const label = btn.textContent; btn.textContent = full ? 'Resetting…' : 'Recovering…'; btn.disabled = true;
+  try { const r = await api(full ? '/api/px4/reset_all' : '/api/px4/recover', {}); logLine('[ui] ' + (full ? 'reset' : 'recover') + ': ' + (r.steps || []).join(', ')); }
+  catch (e) { logLine('[ui] ' + (full ? 'reset' : 'recover') + ' failed: ' + e.message); }
   btn.textContent = label; btn.disabled = false;
 }
-$('#btn-reset').addEventListener('click', (e) => recover(e.target));
-$('#btn-recover').addEventListener('click', (e) => recover(e.target));
+$('#btn-reset').addEventListener('click', (e) => recover(e.target, true));     // everything: vehicle + PX4 reboot
+$('#btn-recover').addEventListener('click', (e) => recover(e.target, false)); // lighter: estimator restart unless in failsafe
 $('#btn-pause').addEventListener('click', async () => { const r = await api('/api/sim/pause', {}); $('#btn-pause').textContent = r.paused ? 'Resume' : 'Pause'; });
 $('#btn-follow').addEventListener('click', (e) => { e.target.classList.toggle('on'); scene.setFollow(e.target.classList.contains('on')); });
 $('#sim-speed').addEventListener('change', e => api('/api/sim/speed', { speed: parseFloat(e.target.value) }));

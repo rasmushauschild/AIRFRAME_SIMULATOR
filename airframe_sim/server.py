@@ -198,6 +198,12 @@ def build_app(state: AppState) -> FastAPI:
     async def disconnect():
         return await run_in_threadpool(state.conn.disconnect)
 
+    @app.post("/api/px4/reset_all")
+    async def px4_reset_all():
+        r = await run_in_threadpool(state.conn.reset_all)
+        state.log("[px4] reset: " + ", ".join(r.get("steps", [])))
+        return r
+
     @app.post("/api/px4/recover")
     async def px4_recover():
         r = await run_in_threadpool(state.conn.recover)
