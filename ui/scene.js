@@ -143,7 +143,7 @@ export function createScene(canvas, handlers) {
       motor.userData.rotorIndex = i;
       const ring = new THREE.Mesh(new THREE.TorusGeometry(rad, 0.003, 6, 48), r.km >= 0 ? matCCW : matCW);
       ring.rotation.x = Math.PI / 2; ring.position.y = 0.02;
-      const arrow = new THREE.ArrowHelper(UP, new THREE.Vector3(0, 0.02, 0), 0.001, 0x0a84ff, 0.04, 0.02);
+      const arrow = makeThrustArrow();
       const spinArrow = makeSpinArrow(rad * 0.75, r.km >= 0);
       spinArrow.position.y = 0.024;
       const label = makeSprite(String(i + 1), document.documentElement.dataset.theme === 'dark' ? '#fafafa' : '#171717');
@@ -208,7 +208,7 @@ export function createScene(canvas, handlers) {
       if (!n) return;
       const r = airframe.rotors[i];
       const frac = r.max_thrust > 0 ? rs.thrust / r.max_thrust : 0;
-      n.arrow.setLength(Math.max(0.001, frac * 0.35), 0.04, 0.02);
+      setThrustArrow(n.arrow, ARROW_BASE + frac * ARROW_GROW, frac);
       n.disc.rotation.y += (r.km >= 0 ? 1 : -1) * rs.omega * 0.6;
       n.disc.material.opacity = 0.25 + 0.5 * rs.omega;
     });
@@ -253,6 +253,32 @@ export function createScene(canvas, handlers) {
     get selected() { return selected; },
     focusOrigin: () => { orbit.target.set(0, 0.1, 0); camera.position.set(1.4, 1.0, 1.6); },
   };
+}
+
+// Thrust vector: a solid arrow along the rotor axis (local +Y). Always visible at ARROW_BASE length so the
+// direction reads at a glance; grows with live thrust and brightens as the motor spins up.
+const ARROW_BASE = 0.16, ARROW_GROW = 0.22, ARROW_R = 0.007;
+const arrowMat = new THREE.MeshStandardMaterial({ color: 0x0a84ff, emissive: 0x0a84ff, emissiveIntensity: 0.35, roughness: 0.4 });
+function makeThrustArrow() {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(ARROW_R, ARROW_R, 1, 12), arrowMat);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(ARROW_R * 3.2, ARROW_R * 7, 16), arrowMat);
+  const base = new THREE.Mesh(new THREE.SphereGeometry(ARROW_R * 1.6, 12, 12), arrowMat);
+  g.add(shaft, head, base);
+  g.userData = { shaft, head };
+  g.position.y = 0.02;
+  g.renderOrder = 2;
+  setThrustArrow(g, ARROW_BASE, 0);
+  return g;
+}
+function setThrustArrow(g, len, frac) {
+  const { shaft, head } = g.userData;
+  const headLen = ARROW_R * 7;
+  const shaftLen = Math.max(0.001, len - headLen);
+  shaft.scale.y = shaftLen; shaft.position.y = shaftLen / 2;
+  head.position.y = shaftLen + headLen / 2;
+  const s = 1 + frac * 0.6;
+  head.scale.set(s, 1, s);
 }
 
 function makeSprite(text, color = '#171717', dark = document.documentElement.dataset.theme === 'dark') {
