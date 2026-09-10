@@ -101,7 +101,11 @@ class EventDecoder:
             off += size
             if enum:
                 ent = enum.get("entries", {}).get(str(v))
-                v = ent.get("description") or ent.get("name") if ent else v
+                if ent:
+                    v = ent.get("description") or ent.get("name")
+                elif enum.get("is_bitfield") or "component" in t or "mode_group" in t:
+                    names = [x.get("name", k) for k, x in enum.get("entries", {}).items() if int(k) and (int(v) & int(k)) == int(k)]
+                    v = "|".join(names) if names else v
             vals.append(v)
         return vals
 
@@ -125,4 +129,5 @@ class EventDecoder:
         desc = _FMT.sub(sub, desc)
         return {"id": ev["id"], "name": e.get("name", ""), "group": e.get("group", ""), "level": ev["level"],
                 "level_name": LEVELS.get(ev["level"], str(ev["level"])), "text": text, "description": desc,
-                "time_ms": ev["time_ms"]}
+                "time_ms": ev["time_ms"], "args": [v if isinstance(v, (int, float, str)) or v is None else str(v) for v in vals],
+                "arg_names": [a.get("name", "") for a in e.get("arguments", [])]}

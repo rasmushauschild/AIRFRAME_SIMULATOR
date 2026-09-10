@@ -271,3 +271,8 @@ details[open] summary::before { transform: rotate(90deg); }
 
 .bar.warn-bar { background: var(--amber); }
 #rotor-table td.hover { min-width: 44px; }
+
+#px4-messages .msg { font-size: 12.5px; padding: 3px 0; border-top: 1px solid var(--line); }
+#px4-messages .msg:first-of-type { border-top: 0; }
+#px4-messages .lvl { display: inline-block; min-width: 54px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
+#px4-messages .msg.err .lvl { color: var(--red); } #px4-messages .msg.warn .lvl { color: var(--amber); }

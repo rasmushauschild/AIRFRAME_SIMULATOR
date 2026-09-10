@@ -461,6 +461,32 @@ $('#st-detected').addEventListener('click', async () => { openTab('connect'); aw
 $('#conn-sitl').addEventListener('click', async () => { await connCall('/api/connection/connect', { mode: 'sitl' }); });
 $('#conn-rescan').addEventListener('click', refreshConnection);
 $('#conn-disconnect').addEventListener('click', async () => { await connCall('/api/connection/disconnect', {}); });
+$('#conn-reboot').addEventListener('click', async () => { if (confirm('Reboot the flight controller? The link reconnects by itself.')) { await api('/api/px4/command', { command: 'reboot' }); setTimeout(refreshConnection, 3000); } });
+// ---- PX4 messages (decoded events) in the Flight tab
+let eventsTimer = null;
+async function refreshEvents() {
+  clearTimeout(eventsTimer);
+  if (!$('#tab-sim').classList.contains('active')) return;
+  try {
+    const r = await api('/api/events');
+    const ev = r.events || [];
+    let summary = null;
+    for (let i = ev.length - 1; i >= 0; i--) if (ev[i].name === 'commander_arming_check_summary') { summary = ev[i]; break; }
+    const el = $('#px4-messages');
+    let html = '';
+    if (summary) {
+      const d = {}; (summary.arg_names || []).forEach((k, i) => d[k] = summary.args[i]);
+      const canArm = String(d.can_arm || '').split('|').filter(x => x && !/^\d+$/.test(x));
+      html += `<div class="conn-row"><div><b>${canArm.length ? 'Can arm in' : 'Cannot arm'}</b> <span class="hint">${canArm.length ? canArm.join(', ') : 'see messages below'}</span>` +
+        `${d.error && d.error !== 0 ? `<div class="err">errors: ${String(d.error).replace(/\|/g, ', ')}</div>` : ''}${d.warning && d.warning !== 0 ? `<div class="warn">warnings: ${String(d.warning).replace(/\|/g, ', ')}</div>` : ''}</div></div>`;
+    }
+    const shown = ev.filter(x => x.level <= 6 && x.group !== 'protocol' && !x.name.includes('summary')).slice(-10).reverse();
+    html += shown.map(x => `<div class="msg ${x.level <= 3 ? 'err' : x.level === 4 ? 'warn' : ''}"><span class="lvl">${x.level_name}</span> ${x.text}</div>`).join('') || '<div class="hint">no messages from PX4 yet</div>';
+    el.innerHTML = html;
+  } catch (e) { }
+  eventsTimer = setTimeout(refreshEvents, 2000);
+}
+$$('.tabs button').forEach(b => b.addEventListener('click', () => { if (b.dataset.tab === 'sim') refreshEvents(); }));
 async function connectHitl(serial) {
   await connCall('/api/connection/connect', { mode: 'hitl', serial, baud: +$('#conn-baud').value || 921600 });
 }
@@ -497,11 +523,13 @@ async function refreshConnection() {
     ${s.action === 'enable_hitl' ? '<button class="pill small primary" data-act="enable_hitl">Enable HITL</button>' : ''}
     ${s.action === 'build_firmware' ? '<button class="pill small primary" data-act="build_firmware">Build firmware</button>' : ''}
     ${s.action === 'upload_firmware' ? '<button class="pill small primary" data-act="upload_firmware">Flash firmware</button>' : ''}
-    ${s.action === 'push' ? '<button class="pill small primary" data-act="push">Push geometry</button>' : ''}</div>`).join('');
+    ${s.action === 'push' ? '<button class="pill small primary" data-act="push">Push geometry</button>' : ''}
+    ${s.action === 'reboot' ? '<button class="pill small" data-act="reboot">Reboot board</button>' : ''}</div>`).join('');
   $$('#conn-checklist button[data-act]').forEach(b => b.addEventListener('click', async () => {
     if (b.dataset.act === 'enable_hitl') { b.textContent = 'Rebooting…'; await connCall('/api/connection/enable_hitl', {}); }
     if (b.dataset.act === 'push') { await pushToPX4($('#geo-push-status'), true); await refreshConnection(); }
     if (b.dataset.act === 'build_firmware') { b.textContent = 'Building…'; await connCall('/api/firmware/build', {}); }
+    if (b.dataset.act === 'reboot') { b.textContent = 'Rebooting…'; await api('/api/px4/command', { command: 'reboot' }); setTimeout(refreshConnection, 3000); }
     if (b.dataset.act === 'upload_firmware') {
       if (!confirm('Flash the HITL-capable firmware to the board now? It reboots and reconnects when done. Parameters are kept.')) return;
       b.textContent = 'Flashing…'; await connCall('/api/firmware/upload', {});

@@ -160,6 +160,7 @@
         <button class="pill small" data-cmd="mode" data-mode="position">Position</button>
         <button class="pill small" data-cmd="mode" data-mode="rtl">RTL</button>
       </div>
+      <div id="px4-messages" class="card"></div>
       <p class="help">Fly from QGroundControl for anything beyond these. SITL: QGC connects by itself on UDP 14550.
         HITL: the simulator forwards the Pixhawk's MAVLink to UDP 14550, so turn off QGC's serial auto-connect.</p>
 
@@ -207,6 +208,7 @@
         <button class="pill small" id="conn-rescan">Rescan USB</button>
         <label class="row">Baud <input id="conn-baud" type="number" value="921600" style="width:96px"></label>
         <button class="pill small" id="conn-disconnect">Disconnect</button>
+        <button class="pill small" id="conn-reboot" title="Reboot the flight controller; the link reconnects by itself">Reboot board</button>
       </div>
 
       <h3>HITL checklist</h3>

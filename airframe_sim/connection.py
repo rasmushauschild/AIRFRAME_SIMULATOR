@@ -467,6 +467,22 @@ class ConnectionManager:
         steps.append({"id": "hil", "label": "Board is in HIL mode and streaming actuator outputs", "ok": streaming,
                       "detail": (f"{link.actuator_seq} actuator messages" if streaming else
                                  ("heartbeat has no HIL flag — reboot after enabling HITL" if hitl and up else ""))})
+        summary = None
+        if hitl:
+            for x in reversed(list(link.recent_events)):
+                if x.get("name") == "commander_arming_check_summary":
+                    summary = dict(zip(x.get("arg_names", []), x.get("args", [])))
+                    break
+        can_arm = str(summary.get("can_arm", "")) if summary else ""
+        ready = bool(summary) and ("takeoff" in can_arm or "loiter" in can_arm)
+        blockers = [x["text"] for x in list(link.recent_events)[-12:] if x.get("level", 9) <= 3 and x.get("group") in ("health", "arming_check")
+                    and "offboard" not in x["text"].lower() and "mission" not in x["text"].lower()] if hitl else []
+        steps.append({"id": "arming", "label": "Estimator settled, board can arm (Takeoff / Hold)",
+                      "ok": streaming and ready,
+                      "detail": ("can arm in: " + can_arm.replace("|", ", ") if ready else
+                                 (("; ".join(dict.fromkeys(blockers)) or "waiting for the arming check report…") if streaming else "")) +
+                                ("" if not streaming or ready else " · if this never clears after a sim reset, reboot the board so the estimator starts clean"),
+                      "action": "reboot" if (streaming and not ready) else None})
         if export_params is not None and hitl and params_ok:
             diff = [k for k, v in export_params.items() if k in link.params and abs(float(link.params[k]["value"]) - float(v)) > 1e-4]
             missing = [k for k in export_params if k not in link.params]
