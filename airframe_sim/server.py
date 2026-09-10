@@ -291,6 +291,8 @@ def build_app(state: AppState) -> FastAPI:
         body = body or {}
         if not link.ctl_connected:
             return JSONResponse({"ok": False, "error": "PX4 control link not connected"}, status_code=409)
+        if link.armed:
+            return JSONResponse({"ok": False, "error": "vehicle is armed; disarm before updating PX4"}, status_code=409)
         params = export_params()
         only = body.get("only")
         if only:

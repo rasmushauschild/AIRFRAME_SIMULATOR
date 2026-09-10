@@ -103,10 +103,11 @@ $('#af-estimate').addEventListener('click', async () => {
   airframe.inertia = r.inertia; setAirframe(airframe);
 });
 $('#af-save').addEventListener('click', async () => {
-  const name = $('#af-savename').value.trim() || airframe.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const name = airframe.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'airframe';
   await api('/api/airframe', { airframe, keep_state: true });
   const r = await api('/api/airframe/save', { name });
   logLine('[ui] saved ' + r.path);
+  const b = $('#af-save'); b.textContent = 'Saved'; setTimeout(() => b.textContent = 'Save', 1500);
   loadPresetList();
 });
 async function loadPresetList() {
@@ -235,17 +236,33 @@ async function pushToPX4(statusEl, short = false) {
     const r = await api('/api/px4/push', { save: true });
     const failed = r.results.filter(x => !x.ok);
     statusEl.innerHTML = r.ok
-      ? `<span class="ok">✓ ${r.results.length} parameters ${short ? 'on PX4' : 'written and saved to the flight controller'}</span>`
+      ? `<span class="ok">✓ PX4 updated (${r.results.length} parameters)</span>`
       : `<span class="err">${failed.length} failed: ${failed.map(f => f.name + ' (' + f.error + ')').join(', ')}</span>`;
     if (!short && r.missing && r.missing.length) statusEl.innerHTML += `<div class="muted">not present in this firmware: ${r.missing.join(', ')}</div>`;
     geometryDirty = false;
     if ($('#tab-px4').classList.contains('active')) await loadExport();
   } catch (e) { statusEl.innerHTML = `<span class="err">${e.message}</span>`; }
 }
-$('#px4-push').addEventListener('click', () => pushToPX4($('#px4-export-status')));
-$('#geo-push').addEventListener('click', () => pushToPX4($('#geo-push-status'), true));
+$('#btn-update').addEventListener('click', () => {
+  if (status.armed) { $('#update-status').innerHTML = '<span class="err">Disarm before updating PX4</span>'; return; }
+  pushToPX4($('#update-status'), true);
+});
 let geometryDirty = false;
-function markDirty() { geometryDirty = true; $('#geo-push-status').innerHTML = '<span class="warn">Changed since last push</span>'; }
+function markDirty() { geometryDirty = true; $('#update-status').innerHTML = '<span class="warn">Changed since last update</span>'; }
+function updateFooter() {
+  const armBtn = $('#btn-arm');
+  armBtn.textContent = status.armed ? 'Disarm' : 'Arm';
+  armBtn.classList.toggle('armed', !!status.armed);
+  armBtn.disabled = !status.ctl_connected;
+  const upd = $('#btn-update');
+  upd.disabled = !status.ctl_connected || !!status.armed;
+  upd.title = status.armed ? 'Disarm first: PX4 rebuilds its allocation when these parameters change' :
+    (status.ctl_connected ? 'Write the rotor geometry and output mapping to the flight controller and save it' : 'PX4 not connected');
+  $$('#mode-pills .pill').forEach(b => b.classList.toggle('active', status.connected && (status.mode_name || '').toLowerCase() === b.textContent.toLowerCase()));
+}
+$('#btn-arm').addEventListener('click', async () => {
+  try { await api('/api/px4/command', { command: status.armed ? 'disarm' : 'arm' }); } catch (e) { logLine('[ui] ' + e.message); }
+});
 
 // ============================================================ parameters
 let paramsLoaded = false;
@@ -374,6 +391,7 @@ function applyStatus(s) {
   $('#st-flightmode').textContent = s.connected ? s.mode_name + (s.mode === 'hitl' && !s.hil_enabled ? ' · HIL OFF (set SYS_HITL=1)' : '') : '—';
   if (!homeFilled) { $('#home-lat').value = s.home.lat; $('#home-lon').value = s.home.lon; $('#home-alt').value = s.home.alt; homeFilled = true; }
   if (s.params_loaded && !paramsLoaded && $('#tab-params').classList.contains('active')) ensureParams();
+  updateFooter();
 }
 function applyState(st) {
   scene.updateState(st);
@@ -548,7 +566,7 @@ async function refreshConnection() {
     ${s.action === 'reboot' ? '<button class="pill small" data-act="reboot">Reboot board</button>' : ''}</div>`).join('');
   $$('#conn-checklist button[data-act]').forEach(b => b.addEventListener('click', async () => {
     if (b.dataset.act === 'enable_hitl') { b.textContent = 'Rebooting…'; await connCall('/api/connection/enable_hitl', {}); }
-    if (b.dataset.act === 'push') { await pushToPX4($('#geo-push-status'), true); await refreshConnection(); }
+    if (b.dataset.act === 'push') { if (status.armed) { alert('Disarm before updating PX4'); return; } await pushToPX4($('#update-status'), true); await refreshConnection(); }
     if (b.dataset.act === 'build_firmware') { b.textContent = 'Building…'; await connCall('/api/firmware/build', {}); }
     if (b.dataset.act === 'reboot') { b.textContent = 'Rebooting…'; await api('/api/px4/command', { command: 'reboot' }); setTimeout(refreshConnection, 3000); }
     if (b.dataset.act === 'upload_firmware') {

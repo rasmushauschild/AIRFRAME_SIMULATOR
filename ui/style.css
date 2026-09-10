@@ -286,3 +286,10 @@ details[open] summary::before { transform: rotate(90deg); }
 .rc-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 4px; transition: width 0.1s linear; }
 .rc-bar::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--rim); }
 .rc-val { text-align: right; color: var(--text-2); }
+
+/* side panel footer */
+.panel-foot { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 18px 14px; border-top: 1px solid var(--line); background: var(--frost); }
+.panel-foot .hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill.disabled, button.pill:disabled { opacity: 0.45; cursor: default; }
+button.pill.armed:hover { filter: brightness(0.92); background: var(--red); color: #fff; }
+#mode-pills .pill.active { background: var(--text); color: var(--bg); box-shadow: none; }
