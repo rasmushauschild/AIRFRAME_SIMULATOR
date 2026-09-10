@@ -483,6 +483,8 @@ class PX4Link:
             "param_count": self.param_count,
             "params_loaded": sum(1 for v in self.params.values() if v["index"] < self.param_count),
             "actuator_seq": self.actuator_seq,
+            "actuators": [round(float(a), 3) for a in self.actuators],
+            "actuator_armed": self.actuator_armed,
             "rx_types": dict(sorted(self.rx_types.items(), key=lambda kv: -kv[1])[:25]),
             "events": [e for e in list(self.recent_events)[-12:]],
             "board_imu": self.board_imu,

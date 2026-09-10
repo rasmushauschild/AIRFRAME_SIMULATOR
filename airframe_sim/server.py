@@ -130,7 +130,12 @@ def build_app(state: AppState) -> FastAPI:
             return JSONResponse({"ok": False, "error": f"invalid airframe: {e}"}, status_code=400)
         keep = bool(body.get("keep_state", True))
         sim.set_airframe(af, keep_state=keep)
-        return {"ok": True, "airframe": af.to_dict(), "problems": af.validate()}
+        hc = af.hover_check()
+        return {"ok": True, "airframe": af.to_dict(), "problems": af.validate() + hc["problems"], "hover": hc}
+
+    @app.get("/api/airframe/hover_check")
+    async def hover_check():
+        return sim.airframe.hover_check()
 
     @app.get("/api/airframes")
     async def list_airframes():
@@ -151,7 +156,8 @@ def build_app(state: AppState) -> FastAPI:
                 return JSONResponse({"ok": False, "error": f"not found: {name}"}, status_code=404)
             af = Airframe.load(p)
         sim.set_airframe(af, keep_state=False)
-        return {"ok": True, "airframe": af.to_dict(), "problems": af.validate()}
+        hc = af.hover_check()
+        return {"ok": True, "airframe": af.to_dict(), "problems": af.validate() + hc["problems"], "hover": hc}
 
     @app.post("/api/airframe/save")
     async def save_airframe(body: dict):
@@ -250,7 +256,7 @@ def build_app(state: AppState) -> FastAPI:
     async def get_export():
         params = export_params()
         current = {k: link.params.get(k, {}).get("value") for k in params}
-        return {"params": params, "current": current, "problems": sim.airframe.validate(),
+        return {"params": params, "current": current, "problems": sim.airframe.validate() + sim.airframe.hover_check()["problems"],
                 "file": sim.airframe.px4_params_file(hitl=link.mode == "hitl")}
 
     @app.get("/api/px4/export.params")

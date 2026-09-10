@@ -268,3 +268,6 @@ details[open] summary::before { transform: rotate(90deg); }
 .pill.detected { background: var(--accent); color: #fff; box-shadow: none; }
 .pill.detected.blink { animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { filter: brightness(1.2); } }
+
+.bar.warn-bar { background: var(--amber); }
+#rotor-table td.hover { min-width: 44px; }

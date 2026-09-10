@@ -42,12 +42,23 @@ function pushAirframe(immediate = false) {
     try {
       const res = await api('/api/airframe', { airframe, keep_state: true });
       showProblems(res.problems);
+      showHover(res.hover);
       markDirty();
     } catch (e) { logLine('[ui] airframe rejected: ' + e.message); }
   };
   if (immediate) doPush(); else pushTimer = setTimeout(doPush, 120);
 }
 function showProblems(p) { $('#af-problems').textContent = (p && p.length) ? '⚠ ' + p.join('\n⚠ ') : ''; }
+function showHover(h) {
+  if (!h || !h.shares) return;
+  $$('#rotor-table tr[data-i]').forEach((tr, i) => {
+    const cell = tr.querySelector('td.hover'); if (!cell) return;
+    const u = h.hover_utilisation ? h.hover_utilisation[i] : null;
+    const bad = h.negative && h.negative.includes(i + 1);
+    cell.innerHTML = bad ? '<span class="err" title="allocator needs negative thrust here">neg</span>'
+      : (u == null ? '' : `<span class="bar ${u > 0.85 ? 'warn-bar' : ''}" style="width:${Math.round(Math.min(u, 1) * 40)}px" title="hover: ${(u * 100).toFixed(0)}% of max thrust"></span>`);
+  });
+}
 
 function setAirframe(af) {
   airframe = af;
@@ -108,7 +119,7 @@ async function loadPresetList() {
 $('#af-preset').addEventListener('change', async (e) => {
   if (!e.target.value) return;
   const r = await api('/api/airframe/load', { name: e.target.value });
-  selected = -1; setAirframe(r.airframe); showProblems(r.problems);
+  selected = -1; setAirframe(r.airframe); showProblems(r.problems); showHover(r.hover);
   e.target.value = '';
 });
 
@@ -127,7 +138,8 @@ const tiltToAxis = (tilt, dir) => {
 function renderRotorTable() {
   const el = $('#rotor-table');
   const rows = airframe.rotors.map((r, i) => rotorRowHtml(i, r)).join('');
-  el.innerHTML = `<table class="grid"><thead><tr><th>#</th><th title="position, m">X</th><th>Y</th><th>Z</th><th title="tilt from vertical, degrees">Tilt°</th><th title="direction of tilt: 0 = forward, 90 = right, 180 = back, -90 = left">Dir°</th><th title="resulting unit thrust vector = CA_ROTORn_AX / AY / AZ">Axis AX AY AZ</th><th>Spin</th><th title="max thrust N">Tmax</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML = `<table class="grid"><thead><tr><th>#</th><th title="position, m">X</th><th>Y</th><th>Z</th><th title="tilt from vertical, degrees">Tilt°</th><th title="direction of tilt: 0 = forward, 90 = right, 180 = back, -90 = left">Dir°</th><th title="resulting unit thrust vector = CA_ROTORn_AX / AY / AZ">Axis AX AY AZ</th><th>Spin</th><th title="max thrust N">Tmax</th><th title="share of max thrust this rotor needs to hover, as PX4's allocator would solve it">Hover</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  api('/api/airframe/hover_check').then(showHover).catch(() => { });
   el.querySelectorAll('tr[data-i]').forEach(tr => {
     const i = +tr.dataset.i;
     tr.addEventListener('click', (e) => { if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('spin') && !e.target.classList.contains('del')) { selected = i; scene.select(i); renderRotorTable(); renderReadout(); } });
@@ -149,6 +161,7 @@ function rotorRowHtml(i, r) {
   <td class="axis" title="CA_ROTOR${i}_AX / AY / AZ">${axisText(r.axis)}</td>
   <td><span class="spin ${ccw ? 'ccw' : 'cw'}" title="click to flip (KM=${r.km})">${ccw ? 'CCW' : 'CW'}</span></td>
   <td><input type="number" step="0.5" data-k="tmax" value="${r.max_thrust}"></td>
+  <td class="hover"></td>
   <td><button class="del" title="remove rotor">✕</button></td></tr>`;
 }
 function renderRotorRow(i) {
