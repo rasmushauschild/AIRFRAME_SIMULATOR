@@ -294,8 +294,10 @@ def build_app(state: AppState) -> FastAPI:
     async def get_export():
         params = export_params()
         current = {k: link.params.get(k, {}).get("value") for k in params}
+        ov = sim.airframe.px4_overrides or {}
         return {"params": params, "current": current, "problems": sim.airframe.validate() + sim.airframe.hover_check()["problems"],
-                "file": sim.airframe.px4_params_file(hitl=link.mode == "hitl")}
+                "file": sim.airframe.px4_params_file(hitl=link.mode == "hitl"),
+                "overrides": ov, "geometry_keys": [k for k in params if k not in ov]}
 
     @app.get("/api/px4/export.params")
     async def get_export_file():
@@ -360,7 +362,24 @@ def build_app(state: AppState) -> FastAPI:
         if name is None or value is None:
             return JSONResponse({"ok": False, "error": "name and value required"}, status_code=400)
         res = await run_in_threadpool(link.set_param, name, value)
+        if res.get("ok"):
+            # remember it with the airframe so Save keeps it and Update PX4 re-applies it
+            sim.airframe.px4_overrides[name] = res["value"]
         return res
+
+    @app.post("/api/airframe/override")
+    async def set_override(body: dict):
+        """Record an edited parameter without touching the vehicle (used when not connected)."""
+        name, value = body.get("name"), body.get("value")
+        if not name or value is None:
+            return JSONResponse({"ok": False, "error": "name and value required"}, status_code=400)
+        sim.airframe.px4_overrides[name] = value
+        return {"ok": True, "overrides": sim.airframe.px4_overrides}
+
+    @app.post("/api/airframe/override_remove")
+    async def remove_override(body: dict):
+        sim.airframe.px4_overrides.pop(body.get("name", ""), None)
+        return {"ok": True, "overrides": sim.airframe.px4_overrides}
 
     @app.post("/api/params/save")
     async def save_params():

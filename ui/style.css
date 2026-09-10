@@ -293,3 +293,11 @@ details[open] summary::before { transform: rotate(90deg); }
 .pill.disabled, button.pill:disabled { opacity: 0.45; cursor: default; }
 button.pill.armed:hover { filter: brightness(0.92); background: var(--red); color: #fff; }
 #mode-pills .pill.active { background: var(--text); color: var(--bg); box-shadow: none; }
+
+/* edited parameters */
+.ov-row { display: grid; grid-template-columns: 150px 92px 90px 1fr 22px; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.ov-row:last-child { border-bottom: 0; }
+.ov-row .pname { font-family: var(--mono); font-size: 12px; }
+.ov-row input { padding: 3px 6px; font-size: 12px; }
+.ov-row .ov-cur { font-variant-numeric: tabular-nums; text-align: right; }
+.prow.edited .pname { color: var(--accent); }

@@ -82,6 +82,7 @@ class Airframe:
     ])  # ground contact points, FRD
     rotors: list[Rotor] = field(default_factory=list)
     hover_pitch_deg: float = 0.0   # nose-up pitch of the structural frame in hover; PX4's "level" is this attitude
+    px4_overrides: dict = field(default_factory=dict)   # PX4 parameters edited by hand, saved with the airframe
 
     # ------------------------------------------------------- hover frame
     def hover_rotation(self):
@@ -142,10 +143,12 @@ class Airframe:
         Rotor i of this airframe maps to PX4 "Motor i+1", which is output function 101+i.
         For HITL/SITL the outputs are the HIL actuator functions (HIL_ACT_FUNCn).
         """
-        p: dict[str, float | int] = {
-            "CA_AIRFRAME": 0,            # multirotor
-            "CA_ROTOR_COUNT": len(self.rotors),
-        }
+        p: dict[str, float | int] = {}
+        # hand-edited parameters first; the geometry-derived ones below always win
+        for k, v in (self.px4_overrides or {}).items():
+            p[k] = int(v) if isinstance(v, bool) else v
+        p["CA_AIRFRAME"] = 0            # multirotor
+        p["CA_ROTOR_COUNT"] = len(self.rotors)
         for i, (r, (pos, ax)) in enumerate(zip(self.rotors, self.rotors_in_px4_frame())):
             p[f"CA_ROTOR{i}_PX"] = round(pos[0], 4)
             p[f"CA_ROTOR{i}_PY"] = round(pos[1], 4)
@@ -175,6 +178,10 @@ class Airframe:
             else:
                 lines.append(f"1\t1\t{k}\t{v:.6f}\t9")  # 9 = MAV_PARAM_TYPE_REAL32
         return "\n".join(lines) + "\n"
+
+    def geometry_param_names(self) -> set[str]:
+        """Parameters px4_params() derives from the geometry (an override of these is ignored)."""
+        return {k for k in self.px4_params(hitl=True) if k not in (self.px4_overrides or {})} | {"SYS_HITL"}
 
     # ------------------------------------------------- PX4 hover feasibility
     def hover_check(self) -> dict:

@@ -102,7 +102,20 @@ HITL runs in real time (no lockstep). Keep `--rate` at 250 Hz or below on USB.
   exactly the expression in PX4's `ActuatorEffectivenessRotors`, so physics and allocator can never disagree about
   yaw direction.
 
-## PX4 Export tab
+## PX4 Parameters tab
+
+One tab holds everything that ends up on the flight controller:
+
+* **Geometry**: rotors, motors, mass, hover pitch, legs. Exported as the `CA_ROTORn_*` set, the output mapping and
+  `SENS_BOARD_Y_OFF`; the derived values are listed under *Parameters derived from the geometry*.
+* **Edited parameters**: any parameter you change in the list below is written to the vehicle immediately and
+  remembered with the airframe (`px4_overrides` in the JSON). **Save** stores them with the preset, **Load** brings
+  them back, and **Update PX4** re-applies them together with the geometry. The ✕ forgets an edit (the vehicle keeps
+  its current value until you change it again).
+* **All parameters**: the full list from the vehicle with descriptions, units, ranges, enums and bitmasks. Edited
+  ones are marked with a dot.
+
+## PX4 Export (part of the PX4 Parameters tab)
 
 * **Push geometry to PX4** writes `CA_AIRFRAME`, `CA_ROTOR_COUNT`, all `CA_ROTORn_*`, and the output-function mapping
   (`PWM_MAIN_FUNCn` for SITL, `HIL_ACT_FUNCn` for HITL), verifies each echoed `PARAM_VALUE`, then issues

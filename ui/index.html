@@ -55,9 +55,7 @@
   <div class="vresizer" id="resize-side" title="Drag to resize"></div>
   <aside class="panel side" id="side">
     <nav class="tabs">
-      <button data-tab="airframe" class="active">Geometry</button>
-      <button data-tab="px4">PX4 export</button>
-      <button data-tab="params">Parameters</button>
+      <button data-tab="airframe" class="active">PX4 Parameters</button>
       <button data-tab="sim">Flight</button>
       <button data-tab="connect">Connect</button>
     </nav>
@@ -117,23 +115,24 @@
         </div>
       </details>
       <div id="af-problems" class="problems"></div>
-    </section>
 
-    <!-- ============================ PX4 EXPORT ============================ -->
-    <section id="tab-px4" class="tab">
-      <p class="help">The rotor geometry maps directly onto PX4's control-allocation parameters
-        (<code>CA_ROTORn_PX/PY/PZ</code>, <code>CA_ROTORn_AX/AY/AZ</code>, <code>CA_ROTORn_KM</code>) plus the output-function
-        mapping. <b>Update PX4</b> (bottom of this panel) writes them over MAVLink, verifies each one and saves them on the flight controller.</p>
-      <div class="row">
-        <a id="px4-download" class="pill" href="/api/px4/export.params" download>Download .params</a>
-        <button id="px4-refresh" class="pill small">Refresh</button>
-      </div>
-      <div id="px4-export-status"></div>
-      <table id="px4-export-table" class="grid"><thead><tr><th>Parameter</th><th>Export</th><th>On vehicle</th><th></th></tr></thead><tbody></tbody></table>
-    </section>
+      <h3>Edited parameters <small>· saved with this airframe, pushed by Update PX4</small></h3>
+      <div id="overrides" class="card"><div class="hint">No hand-edited parameters yet. Edit any parameter below and it appears here.</div></div>
 
-    <!-- ============================ PARAMETERS ============================ -->
-    <section id="tab-params" class="tab">
+      <details id="export-details">
+        <summary>Parameters derived from the geometry</summary>
+        <p class="help">Rotor positions and thrust axes map onto PX4's control-allocation parameters
+          (<code>CA_ROTORn_PX/PY/PZ</code>, <code>CA_ROTORn_AX/AY/AZ</code>, <code>CA_ROTORn_KM</code>), the output mapping and
+          the board rotation for the hover pitch. These are always exported from the geometry above.</p>
+        <div class="row">
+          <a id="px4-download" class="pill small" href="/api/px4/export.params" download>Download .params</a>
+          <button id="px4-refresh" class="pill small">Refresh</button>
+        </div>
+        <div id="px4-export-status"></div>
+        <table id="px4-export-table" class="grid"><thead><tr><th>Parameter</th><th>Export</th><th>On vehicle</th><th></th></tr></thead><tbody></tbody></table>
+      </details>
+
+      <h3>All parameters</h3>
       <div class="row">
         <input id="param-search" type="search" placeholder="Search name or description">
         <select id="param-group" style="width:150px"><option value="">All groups</option></select>

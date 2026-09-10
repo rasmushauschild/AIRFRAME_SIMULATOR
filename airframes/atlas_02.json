@@ -235,8 +235,5 @@
       "ram_drag": false
     }
   ],
-  "hover_pitch_deg": 25,
-  "px4_overrides": {
-    "MIS_TAKEOFF_ALT": 3.0
-  }
+  "hover_pitch_deg": 25
 }

@@ -29,8 +29,7 @@ const scene = createScene($('#c'), {
 $$('.tabs button').forEach(b => b.addEventListener('click', () => {
   $$('.tabs button').forEach(x => x.classList.toggle('active', x === b));
   $$('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
-  if (b.dataset.tab === 'px4') loadExport();
-  if (b.dataset.tab === 'params') ensureParams();
+  if (b.dataset.tab === 'airframe') { ensureParams(); loadExport(); }
   if (b.dataset.tab === 'connect') refreshConnection();
 }));
 function openTab(name) { $$('.tabs button').find(b => b.dataset.tab === name)?.click(); }
@@ -77,6 +76,8 @@ function setAirframe(af) {
   renderRotorTable();
   renderMotorSliders();
   fillMotorCard();
+  airframe.px4_overrides = airframe.px4_overrides || {};
+  renderOverrides();
 }
 const KIND_DEFAULTS = { prop: { km: 0.05, tau: 0.04, prop_diameter: 0.25, thrust_exponent: 2, ram_drag: false },
                         ducted: { km: 0.01, tau: 0.12, prop_diameter: 0.12, thrust_exponent: 2, ram_drag: true } };
@@ -247,8 +248,9 @@ $('#rotor-apply-all').addEventListener('click', () => {
 // ============================================================ PX4 export
 async function loadExport() {
   const r = await api('/api/px4/export');
+  renderOverrides(r);
   const tb = $('#px4-export-table tbody');
-  tb.innerHTML = Object.entries(r.params).map(([k, v]) => {
+  tb.innerHTML = Object.entries(r.params).filter(([k]) => !(r.overrides && k in r.overrides)).map(([k, v]) => {
     const cur = r.current[k];
     const same = cur !== null && cur !== undefined && Math.abs(+cur - +v) < 1e-4;
     const f = (x) => (typeof x === 'number' && !Number.isInteger(x)) ? +x.toFixed(4) : x;
@@ -268,7 +270,7 @@ async function pushToPX4(statusEl, short = false) {
       : `<span class="err">${failed.length} failed: ${failed.map(f => f.name + ' (' + f.error + ')').join(', ')}</span>`;
     if (!short && r.missing && r.missing.length) statusEl.innerHTML += `<div class="muted">not present in this firmware: ${r.missing.join(', ')}</div>`;
     geometryDirty = false;
-    if ($('#tab-px4').classList.contains('active')) await loadExport();
+    await loadExport();
   } catch (e) { statusEl.innerHTML = `<span class="err">${e.message}</span>`; }
 }
 $('#btn-update').addEventListener('click', () => {
@@ -293,6 +295,37 @@ function updateFooter() {
 $('#btn-arm').addEventListener('click', async () => {
   try { await api('/api/px4/command', status.armed ? { command: 'kill', force: true } : { command: 'arm' }); } catch (e) { logLine('[ui] ' + e.message); }
 });
+
+// ============================================================ edited parameters (overrides saved with the airframe)
+function renderOverrides(r) {
+  const ov = (r && r.overrides) || airframe.px4_overrides || {};
+  airframe.px4_overrides = ov;
+  const el = $('#overrides');
+  const names = Object.keys(ov).sort();
+  if (!names.length) { el.innerHTML = '<div class="hint">No hand-edited parameters yet. Edit any parameter below and it appears here.</div>'; return; }
+  el.innerHTML = names.map(n => {
+    const m = meta[n] || {}; const cur = params[n] ? params[n].value : null;
+    const same = cur != null && Math.abs(+cur - +ov[n]) < 1e-5;
+    return `<div class="ov-row"><span class="pname">${n}</span><input type="number" step="any" value="${ov[n]}" data-n="${n}">
+      <span class="ov-cur ${cur == null ? 'muted' : same ? 'ok' : 'warn'}" title="value on the vehicle">${cur == null ? '—' : (Number.isInteger(cur) ? cur : +cur.toPrecision(6))}${m.unit ? ' ' + m.unit : ''}</span>
+      <span class="pdesc" title="${(m.short || '').replace(/"/g, '&quot;')}">${m.short || ''}</span><button class="del" data-n="${n}" title="forget this edit">✕</button></div>`;
+  }).join('');
+  $$('#overrides input').forEach(inp => inp.addEventListener('change', () => setParamValue(inp.dataset.n, parseFloat(inp.value))));
+  $$('#overrides .del').forEach(b => b.addEventListener('click', async () => { await api('/api/airframe/override_remove', { name: b.dataset.n }); delete airframe.px4_overrides[b.dataset.n]; renderOverrides(); }));
+}
+async function setParamValue(n, value) {
+  if (status.ctl_connected) {
+    const r = await api('/api/params/set', { name: n, value });
+    if (!r.ok) { logLine('[ui] ' + n + ': ' + r.error); return r; }
+    params[n] = params[n] || { type: 9 }; params[n].value = r.value;
+    airframe.px4_overrides[n] = r.value;
+  } else {
+    await api('/api/airframe/override', { name: n, value });
+    airframe.px4_overrides[n] = value;
+  }
+  renderOverrides(); renderParams(); markDirty();
+  return { ok: true, value };
+}
 
 // ============================================================ parameters
 let paramsLoaded = false;
@@ -326,7 +359,8 @@ function renderParams() {
     if (q && !(n.toLowerCase().includes(q) || (m.short || '').toLowerCase().includes(q))) continue;
     if (++shown > 400) break;
     const v = params[n].value;
-    html.push(`<div class="prow ${n === selectedParam ? 'selected' : ''}" data-n="${n}"><span class="pname">${n}</span><span class="pval">${typeof v === 'number' && !Number.isInteger(v) ? +v.toPrecision(6) : v}${m.unit ? ' <span class="muted">' + m.unit + '</span>' : ''}</span><span class="pdesc" title="${(m.short || '').replace(/"/g, '&quot;')}">${m.short || ''}</span></div>`);
+    const edited = airframe && airframe.px4_overrides && (n in airframe.px4_overrides);
+    html.push(`<div class="prow ${n === selectedParam ? 'selected' : ''} ${edited ? 'edited' : ''}" data-n="${n}"><span class="pname">${edited ? '● ' : ''}${n}</span><span class="pval">${typeof v === 'number' && !Number.isInteger(v) ? +v.toPrecision(6) : v}${m.unit ? ' <span class="muted">' + m.unit + '</span>' : ''}</span><span class="pdesc" title="${(m.short || '').replace(/"/g, '&quot;')}">${m.short || ''}</span></div>`);
   }
   $('#param-list').innerHTML = html.join('') + (shown > 400 ? '<div class="muted">… refine the search to see more</div>' : '');
   $$('#param-list .prow').forEach(el => el.addEventListener('click', () => openParam(el.dataset.n)));
@@ -357,9 +391,8 @@ function openParam(n) {
     else value = parseFloat($('#pe-value').value);
     $('#pe-result').textContent = '…';
     try {
-      const r = await api('/api/params/set', { name: n, value });
-      $('#pe-result').innerHTML = r.ok ? `<span class="ok">✓ ${r.value}</span>` : `<span class="err">${r.error}</span>`;
-      if (r.ok) { params[n].value = r.value; renderParams(); }
+      const r = await setParamValue(n, value);
+      $('#pe-result').innerHTML = r.ok ? `<span class="ok">✓ ${r.value} · saved with the airframe</span>` : `<span class="err">${r.error}</span>`;
     } catch (e) { $('#pe-result').innerHTML = `<span class="err">${e.message}</span>`; }
   });
   renderParams();
@@ -427,7 +460,7 @@ function applyStatus(s) {
   $('#st-armed').classList.toggle('armed', s.armed);
   $('#st-flightmode').textContent = s.connected ? s.mode_name + (s.mode === 'hitl' && !s.hil_enabled ? ' · HIL OFF (set SYS_HITL=1)' : '') : '—';
   if (!homeFilled) { $('#home-lat').value = s.home.lat; $('#home-lon').value = s.home.lon; $('#home-alt').value = s.home.alt; homeFilled = true; }
-  if (s.params_loaded && !paramsLoaded && $('#tab-params').classList.contains('active')) ensureParams();
+  if (s.params_loaded && !paramsLoaded && $('#tab-airframe').classList.contains('active')) ensureParams();
   updateFooter();
 }
 function applyState(st) {
