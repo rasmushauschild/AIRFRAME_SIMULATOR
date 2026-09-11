@@ -798,7 +798,12 @@ let joyLastSend = 0;
 function joyTick() {
   const src = joyCurrent();
   const nameEl = $('#joy-name');
-  if (!src) { nameEl.textContent = 'No radio connected'; }
+  if (!src) {
+    nameEl.textContent = 'No radio connected';
+    if (status.radio_vcp_ports && status.radio_vcp_ports.length) {
+      $('#joy-hint').innerHTML = `<span class="warn">The radio is in config (VCP) mode</span> — it shows up as a serial port (${status.radio_vcp_ports[0].replace('/dev/', '')}), not as a joystick. Power it off, then power it on with the Power button only (no M button), reconnect USB, and click Connect radio.`;
+    }
+  }
   else {
     nameEl.textContent = src.name + (src.kind === 'hid' ? '' : ' (gamepad)');
     $('#joy-hint').textContent = `${src.axes.length} axes, ${src.buttons.length} buttons`;

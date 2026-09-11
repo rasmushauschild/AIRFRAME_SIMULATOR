@@ -116,6 +116,9 @@ def build_app(state: AppState) -> FastAPI:
         s["arm_ready"] = bool(s["ctl_connected"]) and (ready or bool(s["armed"])) and s["resetting"] <= 0
         s["arm_block_reason"] = why
         s["px4_ports"] = [p["device"] for p in state.conn.list_ports_cached() if p["likely_px4"]]
+        # a RadioMaster radio that shows up as a *serial* port was powered on in VCP/config mode (M + Power);
+        # in that mode it is not a joystick
+        s["radio_vcp_ports"] = [p["device"] for p in state.conn.list_ports_cached() if "radiomaster" in (p["device"] + p["description"]).lower()]
         s["meta_loaded"] = len(state.meta)
         s["meta_source"] = state.meta_source
         s["home"] = {"lat": sim.sensors.home.lat, "lon": sim.sensors.home.lon, "alt": sim.sensors.home.alt}
