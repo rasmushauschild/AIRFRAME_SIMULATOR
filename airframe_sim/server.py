@@ -78,6 +78,15 @@ class AppState:
 def build_app(state: AppState) -> FastAPI:
     app = FastAPI(title="AIRFRAME_SIMULATOR")
     app.mount("/static", StaticFiles(directory=str(UI_DIR)), name="static")
+
+    @app.middleware("http")
+    async def no_cache(request, call_next):
+        # the UI is edited live; browsers otherwise keep stale copies of app.js/scene.js across reloads
+        response = await call_next(request)
+        if request.url.path.startswith("/static/") or request.url.path == "/":
+            response.headers["Cache-Control"] = "no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+        return response
     sim = state.simulator
 
     class _LinkProxy:
