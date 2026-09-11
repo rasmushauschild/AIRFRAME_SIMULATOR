@@ -160,7 +160,8 @@
 
       <div id="joy-card" class="card" style="margin-top:14px">
         <h3 style="margin:0 0 8px">USB remote <small>· SITL only · a RadioMaster / EdgeTX radio on USB-C as a joystick</small></h3>
-        <div class="conn-row"><div><b id="joy-name">No joystick detected</b><div class="hint" id="joy-hint">Plug the radio in over USB-C and choose <i>USB Joystick (HID)</i> on its screen, then move a stick.</div></div>
+        <div class="conn-row"><div><b id="joy-name">No radio connected</b><div class="hint" id="joy-hint">Plug the radio in over USB-C, choose <i>USB Joystick (HID)</i> on its screen, then click Connect radio and pick it from the list.</div></div>
+          <button id="joy-connect" class="pill small primary">Connect radio</button>
           <label class="row" style="margin:0"><input id="joy-enable" type="checkbox"> Send to PX4</label></div>
         <div id="joy-map"></div>
         <div class="row tight" style="margin-top:6px">

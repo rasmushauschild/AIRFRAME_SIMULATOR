@@ -674,24 +674,102 @@ async function refreshConnection() {
 }
 
 
-// ============================================================ USB joystick (Gamepad API -> MANUAL_CONTROL)
+// ============================================================ USB remote (WebHID picker, Gamepad API fallback) -> MANUAL_CONTROL
 const JOY_FUNCS = [
   { key: 'roll', label: 'Roll', axis: 0, invert: false },
-  { key: 'pitch', label: 'Pitch', axis: 1, invert: true },      // stick forward is negative on most gamepads
+  { key: 'pitch', label: 'Pitch', axis: 1, invert: true },      // stick forward is negative on most devices
   { key: 'throttle', label: 'Throttle', axis: 2, invert: false },
   { key: 'yaw', label: 'Yaw', axis: 3, invert: false },
 ];
 let joyMap = JOY_FUNCS.map(f => ({ ...f }));
 try { const saved = JSON.parse(localStorage.getItem('airframe-joystick') || 'null'); if (saved && saved.length === 4) joyMap = saved; } catch { }
-let joyLearn = null, joyLearnBase = null, joyPad = null;
-function joyFind() {
-  const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
-  joyPad = pads[0] || null;
-  return joyPad;
-}
+let joyLearn = null, joyLearnBase = null;
+// current input source: { name, axes: [-1..1], buttons: [bool], kind: 'hid' | 'gamepad' }
+let joySrc = null;
+let hidDevice = null;
 function joySave() { try { localStorage.setItem('airframe-joystick', JSON.stringify(joyMap)); } catch { } }
+
+// --- WebHID: parse the device's own report descriptor so any joystick layout works (8-bit, 11-bit, 16-bit axes…)
+const HID_AXIS_USAGES = { 0x30: 'X', 0x31: 'Y', 0x32: 'Z', 0x33: 'Rx', 0x34: 'Ry', 0x35: 'Rz', 0x36: 'Slider', 0x37: 'Dial', 0x38: 'Wheel' };
+function hidBuildLayout(device) {
+  const reports = {};   // reportId -> { axes: [{bit,size,min,max,name}], buttons: [{bit}] }
+  for (const col of device.collections) {
+    for (const rep of col.inputReports) {
+      const lay = reports[rep.reportId] || (reports[rep.reportId] = { axes: [], buttons: [] });
+      let bit = 0;
+      for (const it of rep.items) {
+        for (let k = 0; k < it.reportCount; k++) {
+          const usage = it.isRange ? (it.usageMinimum + k) : (it.usages[k] ?? it.usages[0] ?? 0);
+          const page = usage >>> 16, id = usage & 0xffff;
+          if (page === 0x01 && HID_AXIS_USAGES[id] && it.reportSize > 1) {
+            lay.axes.push({ bit, size: it.reportSize, min: it.logicalMinimum, max: it.logicalMaximum, name: HID_AXIS_USAGES[id] });
+          } else if (page === 0x09 && it.reportSize === 1) {
+            lay.buttons.push({ bit });
+          }
+          bit += it.reportSize;
+        }
+      }
+    }
+  }
+  return reports;
+}
+function hidBits(dv, bit, size, signed) {
+  let v = 0;
+  for (let i = 0; i < size; i++) { const b = bit + i; if ((dv.getUint8(b >> 3) >> (b & 7)) & 1) v |= (1 << i); }
+  if (signed && (v & (1 << (size - 1)))) v -= (1 << size);
+  return v;
+}
+async function hidUse(device) {
+  try {
+    if (!device.opened) await device.open();
+  } catch (e) { logLine('[ui] could not open the radio: ' + e.message); return; }
+  const layout = hidBuildLayout(device);
+  hidDevice = device;
+  joySrc = { name: device.productName || 'HID joystick', axes: [], buttons: [], kind: 'hid' };
+  device.addEventListener('inputreport', (e) => {
+    const lay = layout[e.reportId] || layout[0]; if (!lay) return;
+    const dv = e.data;
+    try {
+      joySrc.axes = lay.axes.map(a => { const signed = a.min < 0; const v = hidBits(dv, a.bit, a.size, signed); return Math.max(-1, Math.min(1, ((v - a.min) / (a.max - a.min)) * 2 - 1)); });
+      joySrc.buttons = lay.buttons.map(b => !!hidBits(dv, b.bit, 1, false));
+    } catch { }
+  });
+  const n = Object.values(layout).reduce((a, l) => a + l.axes.length, 0);
+  logLine(`[ui] radio connected: ${joySrc.name} (${n} axes)`);
+  joyRenderMap();
+}
+async function joyConnect() {
+  if (!navigator.hid) {
+    logLine('[ui] this browser has no device picker (WebHID). Open the app in Chrome or Edge, or move a stick so the gamepad fallback finds the radio.');
+    $('#joy-hint').textContent = 'This browser cannot show a device picker (Safari has no WebHID). Open the page in Chrome/Edge, or move a stick: the gamepad fallback may still find it.';
+    return;
+  }
+  try {
+    const devices = await navigator.hid.requestDevice({ filters: [] });
+    if (devices.length) await hidUse(devices[0]);
+  } catch (e) { logLine('[ui] radio picker: ' + e.message); }
+}
+async function hidReconnect() {   // devices the user already granted come back without the picker
+  if (!navigator.hid) return;
+  try {
+    const devs = await navigator.hid.getDevices();
+    const joy = devs.find(d => d.collections.some(c => c.usagePage === 1 && (c.usage === 4 || c.usage === 5))) || devs[0];
+    if (joy) await hidUse(joy);
+  } catch { }
+}
+function joyGamepad() {
+  const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+  const p = pads[0];
+  if (!p) return null;
+  return { name: p.id.replace(/\s*\(.*$/, '').slice(0, 48), axes: Array.from(p.axes), buttons: p.buttons.map(b => b.pressed), kind: 'gamepad' };
+}
+function joyCurrent() {
+  if (joySrc && joySrc.kind === 'hid' && hidDevice && hidDevice.opened) return joySrc;
+  return joyGamepad();
+}
 function joyRenderMap() {
-  const n = joyPad ? joyPad.axes.length : 8;
+  const src = joyCurrent();
+  const n = src && src.axes.length ? src.axes.length : 8;
   $('#joy-map').innerHTML = joyMap.map((f, i) => `<div class="joy-row"><span class="joy-label">${f.label}</span>
     <select data-i="${i}" class="joy-axis">${Array.from({ length: n }, (_, a) => `<option value="${a}" ${a === f.axis ? 'selected' : ''}>axis ${a + 1}</option>`).join('')}</select>
     <label class="row" style="margin:0"><input type="checkbox" data-i="${i}" class="joy-inv" ${f.invert ? 'checked' : ''}> invert</label>
@@ -699,45 +777,46 @@ function joyRenderMap() {
     <span class="rc-bar joy-bar"><i data-i="${i}" style="width:50%"></i></span><span class="rc-val num joy-val" data-i="${i}">—</span></div>`).join('');
   $$('.joy-axis').forEach(sel => sel.addEventListener('change', () => { joyMap[+sel.dataset.i].axis = +sel.value; joySave(); }));
   $$('.joy-inv').forEach(cb => cb.addEventListener('change', () => { joyMap[+cb.dataset.i].invert = cb.checked; joySave(); }));
-  $$('.joy-learn').forEach(b => b.addEventListener('click', () => { joyLearn = +b.dataset.i; joyLearnBase = joyPad ? Array.from(joyPad.axes) : null; joyRenderMap(); }));
+  $$('.joy-learn').forEach(b => b.addEventListener('click', () => { joyLearn = +b.dataset.i; const s = joyCurrent(); joyLearnBase = s ? s.axes.slice() : null; joyRenderMap(); }));
 }
-function joyValue(f) {
-  if (!joyPad) return 0;
-  let v = joyPad.axes[f.axis] ?? 0;
+function joyValue(src, f) {
+  if (!src) return 0;
+  let v = src.axes[f.axis] ?? 0;
   if (Math.abs(v) < 0.02) v = 0;                  // deadband
   return f.invert ? -v : v;
 }
 let joyLastSend = 0;
 function joyTick() {
-  const pad = joyFind();
+  const src = joyCurrent();
   const nameEl = $('#joy-name');
-  if (!pad) { nameEl.textContent = 'No joystick detected'; $('#joy-hint').textContent = 'Plug the radio in over USB-C and choose USB Joystick (HID) on its screen, then move a stick.'; }
+  if (!src) { nameEl.textContent = 'No radio connected'; }
   else {
-    nameEl.textContent = pad.id.replace(/\s*\(.*$/, '').slice(0, 48);
-    $('#joy-hint').textContent = `${pad.axes.length} axes, ${pad.buttons.length} buttons`;
+    nameEl.textContent = src.name + (src.kind === 'hid' ? '' : ' (gamepad)');
+    $('#joy-hint').textContent = `${src.axes.length} axes, ${src.buttons.length} buttons`;
     if (joyLearn != null && joyLearnBase) {
       let best = -1, bestD = 0.3;
-      pad.axes.forEach((v, a) => { const d = Math.abs(v - joyLearnBase[a]); if (d > bestD) { bestD = d; best = a; } });
+      src.axes.forEach((v, a) => { const d = Math.abs(v - (joyLearnBase[a] ?? 0)); if (d > bestD) { bestD = d; best = a; } });
       if (best >= 0) { joyMap[joyLearn].axis = best; joyLearn = null; joyLearnBase = null; joySave(); joyRenderMap(); }
     }
     joyMap.forEach((f, i) => {
-      const v = joyValue(f); const bar = document.querySelector(`.joy-bar i[data-i="${i}"]`), val = document.querySelector(`.joy-val[data-i="${i}"]`);
+      const v = joyValue(src, f); const bar = document.querySelector(`.joy-bar i[data-i="${i}"]`), val = document.querySelector(`.joy-val[data-i="${i}"]`);
       if (bar) bar.style.width = ((v + 1) / 2 * 100).toFixed(0) + '%';
       if (val) val.textContent = v.toFixed(2);
     });
     const now = performance.now();
     if ($('#joy-enable').checked && status.conn_mode === 'sitl' && joyWs && joyWs.readyState === 1 && now - joyLastSend > 20) {   // 50 Hz, SITL only
       joyLastSend = now;
-      const g = (k) => joyValue(joyMap.find(f => f.key === k));
-      const aux = pad.axes.slice(4, 10).map(v => +v.toFixed(3));
-      let buttons = 0; pad.buttons.forEach((b, i) => { if (b.pressed && i < 16) buttons |= (1 << i); });
+      const g = (k) => joyValue(src, joyMap.find(f => f.key === k));
+      const aux = src.axes.slice(4, 10).map(v => +v.toFixed(3));
+      let buttons = 0; src.buttons.forEach((b, i) => { if (b && i < 16) buttons |= (1 << i); });
       joyWs.send(JSON.stringify({ type: 'manual', roll: g('roll'), pitch: g('pitch'), throttle: (g('throttle') + 1) / 2, yaw: g('yaw'), buttons, aux }));
     }
   }
   if ($('#tab-sim').classList.contains('active')) requestAnimationFrame(joyTick); else setTimeout(joyTick, 500);
 }
-window.addEventListener('gamepadconnected', () => { joyFind(); joyRenderMap(); logLine('[ui] joystick connected: ' + (joyPad ? joyPad.id : '')); });
-window.addEventListener('gamepaddisconnected', () => { joyPad = null; joyRenderMap(); });
-$('#joy-enable').addEventListener('change', (e) => logLine('[ui] joystick ' + (e.target.checked ? 'sending to PX4 (MANUAL_CONTROL at 50 Hz)' : 'stopped')));
+window.addEventListener('gamepadconnected', () => { joyRenderMap(); const s = joyGamepad(); logLine('[ui] gamepad found: ' + (s ? s.name : '')); });
+if (navigator.hid) navigator.hid.addEventListener('disconnect', (e) => { if (e.device === hidDevice) { hidDevice = null; joySrc = null; logLine('[ui] radio disconnected'); joyRenderMap(); } });
+$('#joy-connect').addEventListener('click', joyConnect);
+$('#joy-enable').addEventListener('change', (e) => logLine('[ui] radio ' + (e.target.checked ? 'sending to PX4 (MANUAL_CONTROL at 50 Hz)' : 'stopped')));
 $('#joy-priority').addEventListener('change', (e) => setParamValue('COM_RC_IN_MODE', +e.target.value));
-joyRenderMap(); joyTick();
+joyRenderMap(); joyTick(); hidReconnect();

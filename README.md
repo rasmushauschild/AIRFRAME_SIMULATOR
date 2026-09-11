@@ -174,7 +174,10 @@ axes: alternate spins or cant rotors in opposing pairs).
 ## Flying with a USB remote (RadioMaster / EdgeTX)
 
 Plug the radio in over USB-C and pick **USB Joystick (HID)** on its screen (Radio settings → USB mode sets the
-default). It shows up as a gamepad; the Flight tab's **USB remote** card picks it up as soon as you move a stick.
+default). On the Flight tab's **USB remote** card click **Connect radio** and pick it in the browser's device list
+(WebHID; Chrome or Edge — Safari has no device picker, there the gamepad fallback kicks in when you move a stick).
+The page reads the radio's own HID report layout, so any EdgeTX joystick configuration works. Once granted, the radio
+reconnects without the picker.
 Map roll, pitch, throttle and yaw with *Learn* (press, then move that stick), tick **Send to PX4**, and the page streams
 MAVLink `MANUAL_CONTROL` at 50 Hz, exactly what QGroundControl sends for a joystick. SITL only: in HITL the real receiver on the board is the manual input, and the card is hidden.
 
