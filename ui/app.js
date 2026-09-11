@@ -611,10 +611,13 @@ async function refreshEvents() {
       html += `<div class="conn-row"><div><b>${canArm.length ? 'Can arm in' : 'Cannot arm'}</b> <span class="hint">${canArm.length ? canArm.join(', ') : 'see messages below'}</span>` +
         `${errs.length ? `<div class="err">blocking: ${errs.join(', ').replace(/_/g, ' ')}</div>` : ''}</div></div>`;
     }
-    // only checks that matter for the current mode; offboard/mission checks always fail elsewhere
+    // PX4 sends its arming/health checks as a batch right before each summary. Show only the batch that belongs
+    // to the latest summary (everything older is history, not the current state), plus anything newer than it.
     const modeNow = (status.mode_name || '').toLowerCase();
+    const lastSummary = [...ev].reverse().find(x => x.name === 'commander_arming_check_summary');
+    const tCut = lastSummary ? lastSummary.t - 0.6 : (Date.now() / 1000 - 10);
     const seen = new Set();
-    const shown = ev.filter(x => x.level <= 6 && x.group !== 'protocol' && !x.name.includes('summary'))
+    const shown = ev.filter(x => x.t >= tCut && x.level <= 6 && x.group !== 'protocol' && !x.name.includes('summary'))
       .filter(x => !(/offboard/i.test(x.text) && modeNow !== 'offboard') && !(/mission/i.test(x.text) && modeNow !== 'mission'))
       .reverse().filter(x => { if (seen.has(x.text)) return false; seen.add(x.text); return true; }).slice(0, 8);
     html += shown.map(x => `<div class="msg ${x.level <= 3 ? 'err' : x.level === 4 ? 'warn' : ''}"><span class="lvl">${x.level_name}</span> ${x.text}</div>`).join('') || '<div class="hint">no messages from PX4 yet</div>';
