@@ -639,6 +639,10 @@ class ConnectionManager:
         t0 = time.time()
         while time.time() - t0 < 60 and self.link is link and (session is None or self._params_session == session):
             if link.hil_enabled and link.actuator_seq - seq0 > 300 and time.time() - link.ctl_rx_time < 2.0:
+                try:
+                    link.trim_telemetry()      # a reboot restores the board's default stream rates
+                except Exception as e:
+                    self.log(f"[link] telemetry throttle failed: {e}")
                 time.sleep(2.0)
                 if self.link is link:
                     self._select_default_mode(link)
