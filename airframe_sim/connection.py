@@ -433,6 +433,10 @@ class ConnectionManager:
             link.reboot()
             self._after_reboot(link)
             steps.append("rebooted (termination/failsafe)")
+        elif self.mode == "hitl":
+            link.reboot()
+            self._after_reboot(link)
+            steps.append("rebooted (HITL never restarts EKF2 in place)")
         else:
             time.sleep(1.5)
             link.restart_estimator()
@@ -462,15 +466,12 @@ class ConnectionManager:
             return {"ok": True, "steps": steps}
         main_mode = (link.custom_mode >> 16) & 0xFF
         if self.mode == "hitl":
-            if main_mode == 10:   # Termination: only a reboot clears it
-                self._reset_busy_until = time.time() + 30
-                link.reboot()
-                self._after_reboot(link)
-                steps.append("board rebooted (was in flight termination)")
-            else:
-                self._reset_busy_until = time.time() + 8
-                threading.Thread(target=self._settle_after_reset, args=(link,), daemon=True).start()
-                steps.append("estimator restarting (board rebooted if that fails)")
+            # HITL: always reboot. Termination needs it, and it is the only estimator reset that works on the
+            # board (see _post_boot_ekf_restart); the sim is already at rest so EKF2 aligns on good data.
+            self._reset_busy_until = time.time() + 20
+            link.reboot()
+            self._after_reboot(link)
+            steps.append("board rebooted (was in flight termination)" if main_mode == 10 else "board rebooted")
         else:
             with self._lock:
                 if main_mode == 10 and self.px4_running() and self.args.launch_px4:
@@ -494,14 +495,6 @@ class ConnectionManager:
                 ok = link.restart_estimator()
             except Exception as e:
                 self.log(f"[px4] estimator restart failed: {e}")
-            if not ok and self.mode == "hitl":
-                # the shell is not answering (a saturated USB link does that): a reboot is the reliable way to get a
-                # freshly aligned estimator; the sim is already at rest so it initialises on good data
-                self.log("[px4] rebooting the board to restart the estimator")
-                self._reset_busy_until = time.time() + 30
-                link.reboot()
-                self._after_reboot(link)
-                return
         self._select_default_mode(link)
 
     def _select_default_mode(self, link, timeout: float = 40.0) -> None:
@@ -527,6 +520,11 @@ class ConnectionManager:
         link = self.link
         if link is None or not link.ctl_connected:
             return {"ok": False, "error": "not connected"}
+        if self.mode == "hitl":
+            self._reset_busy_until = time.time() + 30
+            link.reboot()
+            self._after_reboot(link)
+            return {"ok": True, "error": None}
         ok = link.restart_estimator()
         return {"ok": ok, "error": None if ok else "no reply from the board's shell; use Reset to reboot the board"}
 
@@ -632,17 +630,17 @@ class ConnectionManager:
         return ports
 
     def _post_boot_ekf_restart(self, link, session: int | None = None) -> None:
-        """After a (re)boot: wait for HIL data to flow again, give the EKF a few seconds, then restart it once."""
+        """After a (re)boot: wait for HIL data to flow again, give the EKF a few seconds, then select the default
+        mode. EKF2 is deliberately NOT restarted at runtime: on the FMU v6X (PX4 v1.17) an "ekf2 stop / start" over
+        the shell leaves an estimator that passes the arming checks but stops publishing the moment the vehicle
+        arms ("Waiting for estimator to initialize", then flight termination). A fresh boot with the simulator
+        already streaming initialises cleanly, so a reboot is the only estimator reset used in HITL."""
         seq0 = link.actuator_seq
         t0 = time.time()
         while time.time() - t0 < 60 and self.link is link and (session is None or self._params_session == session):
             if link.hil_enabled and link.actuator_seq - seq0 > 300 and time.time() - link.ctl_rx_time < 2.0:
-                time.sleep(5.0)
+                time.sleep(2.0)
                 if self.link is link:
-                    try:
-                        link.restart_estimator()
-                    except Exception as e:
-                        self.log(f"[px4] estimator restart failed: {e}")
                     self._select_default_mode(link)
                 return
             time.sleep(0.5)
@@ -650,6 +648,7 @@ class ConnectionManager:
     def _after_reboot(self, link) -> None:
         """Explicitly schedule the post-boot estimator restart for a reboot we triggered ourselves
         (the link watcher only catches it if the control link visibly drops)."""
+        self._own_reboot_until = time.time() + 40.0
         def run():
             t0 = time.time()
             while time.time() - t0 < 20 and time.time() - link.ctl_rx_time < 1.5:
@@ -692,13 +691,23 @@ class ConnectionManager:
             if up and fetched_for != self._params_session:
                 fetched_for = self._params_session
                 time.sleep(1.0)
+                keep = (time.time() < getattr(self, "_own_reboot_until", 0.0) and link.param_count
+                        and len(link.params) >= link.param_count)
                 try:
                     link.request_autopilot_version()
-                    link.fetch_all_params()
+                    if keep:
+                        self.log(f"[params] board rebooted by us: keeping the {len(link.params)} cached parameters")
+                    else:
+                        link.fetch_all_params()
                     if self.on_params:
                         self.on_params()
                 except Exception as e:
                     self.log(f"[params] fetch failed: {e}")
+                if link.mode == "hitl" and link.param_count:
+                    try:
+                        link.trim_telemetry()
+                    except Exception as e:
+                        self.log(f"[link] telemetry throttle failed: {e}")
                 if not link.param_count or len(link.params) < link.param_count:
                     # the board was still booting (or the link hiccupped): try again on the next pass
                     self.log("[params] incomplete download, retrying")

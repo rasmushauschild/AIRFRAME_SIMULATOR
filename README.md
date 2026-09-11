@@ -85,14 +85,26 @@ QGroundControl keeps working during HITL: the simulator forwards the vehicle's M
 
 HITL runs in real time (no lockstep). Keep `--rate` at 250 Hz or below on USB.
 
-### HITL and SD logging
+### HITL: the estimator is only ever reset by a reboot
 
-The HITL export sets `SDLOG_MODE = -1` (logging off). Starting the SD-card logger at arming starves the USB MAVLink
-link on the board: the HIL sensor stream gaps, EKF2 loses its attitude and PX4 terminates the flight a second after
-"Armed". Verified on an FMU v6X, PX4 v1.17: identical takeoff, logging on → termination, logging off → hover.
-Record HITL flights from the simulator side instead. When the board's shell stops answering (a saturated USB link
-does that; the checklist then shows the estimator restart failing), Reset reboots the board, which is the reliable
-way to get a freshly aligned estimator.
+On the FMU v6X with PX4 v1.17, restarting EKF2 at runtime (`ekf2 stop` / `ekf2 start` over the MAVLink shell)
+leaves an estimator that passes the arming checks but stops publishing the moment the vehicle arms: "Waiting for
+estimator to initialize", then flight termination a second after "Armed". A fresh boot with the simulator already
+streaming initialises cleanly. So in HITL the app never restarts EKF2 in place: Reset, "Restart estimator" and a
+board-rotation change all reboot the board, with the sim at rest so EKF2 aligns on good data. A Reset takes about
+20 s: reboot and USB re-enumeration, then a few seconds for EKF2 before Takeoff mode is selected (the parameters
+are kept from before the reboot). SITL keeps the in-place restart, which works there.
+
+### HITL: motor lag and loop latency
+
+HITL is not lockstep: sensor data and actuator commands cross a real USB link, so the control loop sees real
+latency on top of the motor lag you model. With ducted fans (`tau` 0.12 s) and PX4's default multicopter rate gains
+the ATLAS takeoff is unstable in HITL (pitch and yaw run away within two seconds and the vehicle flips) while the
+same airframe is marginal in lockstep SITL. The identical HITL takeoff with `tau` 0.04 s climbs and holds. This is a
+real property of the aircraft, not of the simulator: rate loops for slow-spooling EDFs need lower gains
+(`MC_PITCHRATE_P/D`, `MC_ROLLRATE_P/D`, `MC_YAWRATE_P`) or a faster motor response, and HITL is the place to tune
+them. The app throttles the board's default telemetry streams in HITL (about 400 messages/s on USB by default) so
+the link carries mostly HIL traffic.
 
 ## Editing an airframe
 

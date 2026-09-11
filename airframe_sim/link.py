@@ -182,6 +182,20 @@ class PX4Link:
         with self._ctl_lock:
             self.ctl.mav.command_long_send(self.target_system, self.target_component, command, 0, *p[:7])
 
+    # Board -> host telemetry the USB instance streams by default (about 400 messages/s on an FMU v6X). In HITL that
+    # traffic shares the link with HIL_SENSOR/HIL_ACTUATOR_CONTROLS and adds latency to the control loop, so the
+    # heavy streams are throttled or switched off; the UI reads ATTITUDE, HIGHRES_IMU and the status messages.
+    TELEMETRY_RATES_HZ = {30: 20, 105: 10, 31: 0, 33: 5, 32: 0, 331: 0, 65: 5, 83: 0, 36: 0, 141: 5, 24: 5, 74: 5, 85: 0,
+                          12901: 0}   # ATTITUDE, HIGHRES_IMU, ATT_QUAT, GLOBAL_POS, LOCAL_POS, ODOMETRY, RC_CH, ATT_TGT, SERVO_RAW, ALT, GPS_RAW, VFR_HUD, POS_TGT, ODID
+
+    def trim_telemetry(self) -> None:
+        """Throttle the board's default telemetry streams (HITL); 0 Hz disables a stream."""
+        for msg_id, hz in self.TELEMETRY_RATES_HZ.items():
+            interval = -1.0 if hz <= 0 else 1e6 / hz
+            self.send_command_long(mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, float(msg_id), interval)
+            time.sleep(0.02)
+        self.log("[link] board telemetry throttled for HITL")
+
     def send_manual_control(self, roll: float, pitch: float, throttle: float, yaw: float, buttons: int = 0,
                             aux: list[float] | None = None) -> None:
         """MAVLink MANUAL_CONTROL, the same message QGroundControl sends for a joystick.
