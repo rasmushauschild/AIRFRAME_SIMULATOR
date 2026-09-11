@@ -493,7 +493,7 @@ function applyState(st) {
   $('#st-time').textContent = `${st.t.toFixed(1)} s`;
   $('#st-rtf').textContent = `RTF ${st.rtf ? st.rtf.toFixed(2) : '—'}${st.lockstep_timeouts ? ' · ' + st.lockstep_timeouts + ' waits' : ''}`;
   const [r, p, y] = st.euler.map(deg);
-  $('#st-pose').textContent = ` · N ${st.pos[0].toFixed(1)} E ${st.pos[1].toFixed(1)} alt ${(-st.pos[2]).toFixed(2)} m · R ${r.toFixed(0)}° P ${p.toFixed(0)}° Y ${y.toFixed(0)}°${st.on_ground ? ' · on ground' : ''}`;
+  $('#st-pose').textContent = `N ${st.pos[0].toFixed(1)} E ${st.pos[1].toFixed(1)} alt ${(-st.pos[2]).toFixed(2)} m · R ${r.toFixed(0)}° P ${p.toFixed(0)}° Y ${y.toFixed(0)}°${st.on_ground ? ' · on ground' : ''}`;
   if ($('#tab-sim').classList.contains('active')) {
     $('#rotor-live').innerHTML = st.rotors.map((x, i) => `<div><b>M${i + 1}</b> cmd ${x.cmd.toFixed(2)} · ω ${x.omega.toFixed(2)} <span class="bar" style="width:${Math.round(x.thrust / (airframe.rotors[i]?.max_thrust || 1) * 120)}px"></span> ${x.thrust.toFixed(2)} N</div>`).join('');
   }
