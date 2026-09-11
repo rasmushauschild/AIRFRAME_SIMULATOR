@@ -513,12 +513,15 @@ class PX4Link:
         self.log("[px4] restarting the estimator (ekf2 stop / start)")
         self.shell("ekf2 stop", timeout=2.0)
         time.sleep(1.0)
-        out = self.shell("ekf2 start", timeout=2.0)
-        time.sleep(0.5)
-        status = self.shell("ekf2 status", timeout=2.0)
-        ok = "running" in status.lower() or "ekf2" in status.lower()
+        self.shell("ekf2 start", timeout=2.0)
+        # Verify by data rather than by shell text (replies are slow or lost on a saturated USB link): PX4 only
+        # streams ATTITUDE while EKF2 publishes, so a running estimator shows as a steady flow of them.
+        time.sleep(1.5)
+        n0 = self.rx_types.get("ATTITUDE", 0)
+        time.sleep(1.0)
+        ok = self.rx_types.get("ATTITUDE", 0) - n0 >= 5
         if not ok:
-            self.log("[px4] estimator restart: no reply from the shell" + (f" ({out.strip()[:80]})" if out.strip() else ""))
+            self.log("[px4] estimator restart: EKF2 is not publishing an attitude")
         return ok
 
     def request_autopilot_version(self) -> None:
