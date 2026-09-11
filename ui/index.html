@@ -56,6 +56,7 @@
   <aside class="panel side" id="side">
     <nav class="tabs">
       <button data-tab="airframe" class="active">Parameters</button>
+      <button data-tab="design">Optimize</button>
       <button data-tab="sim">Flight</button>
       <button data-tab="connect">Connect</button>
     </nav>
@@ -94,7 +95,23 @@
         <label title="reaction torque per unit thrust (CA_ROTORn_KM magnitude; spin sign is set per rotor)">|KM| <input id="m-km" type="number" step="0.005" min="0"></label>
         <label title="fan / prop diameter, m">Ø m <input id="m-dia" type="number" step="0.01" min="0.02"></label>
         <label title="thrust = Tmax · ω^n">n <input id="m-exp" type="number" step="0.1" min="1" max="3"></label>
-        <label class="row" style="align-self:end;padding-bottom:6px" title="momentum drag of the inlet mass flow in crossflow"><input id="m-ram" type="checkbox"> ram drag</label>
+        <label class="row" style="align-self:end;padding-bottom:6px" title="momentum drag of the inlet mass flow"><input id="m-ram" type="checkbox"> ram drag</label>
+        <label title="thrust lost when a jetfoil bends the jet by 90°, %">Jetfoil loss % <input id="m-turnloss" type="number" step="1" min="0" max="60"></label>
+      </div>
+      <h3>Wing</h3>
+      <div class="row">
+        <label class="row" style="align-self:end;padding-bottom:6px"><input id="w-on" type="checkbox"> Wing</label>
+        <label title="total area, m²">Area m² <input id="w-area" type="number" step="0.01" min="0"></label>
+        <label title="tip to tip, m (60° delta: span = √(2.31 · area))">Span m <input id="w-span" type="number" step="0.01" min="0.05"></label>
+        <label title="chord angle above the body X axis, nose-up">Incidence° <input id="w-inc" type="number" step="0.5"></label>
+        <label>CD0 <input id="w-cd0" type="number" step="0.005" min="0"></label>
+        <label>Stall° <input id="w-stall" type="number" step="1" min="5" max="60"></label>
+      </div>
+      <div class="row">
+        <label title="aerodynamic centre, m">X <input id="w-x" type="number" step="0.01"></label>
+        <label>Y <input id="w-y" type="number" step="0.01"></label>
+        <label>Z <input id="w-z" type="number" step="0.01"></label>
+        <label class="row" style="align-self:end;padding-bottom:6px" title="sharp leading edge (delta): Polhamus vortex lift"><input id="w-vortex" type="checkbox"> vortex lift</label>
       </div>
       <details>
         <summary>Drag, body, legs</summary>
@@ -138,6 +155,35 @@
       <div id="param-count" class="hint" style="margin:6px 0 4px 8px"></div>
       <div id="param-editor" class="editor hidden"></div>
       <div id="param-list"></div>
+    </section>
+
+    <!-- ============================ DESIGN / OPTIMIZE ============================ -->
+    <section id="tab-design" class="tab">
+      <h3>Cruise</h3>
+      <div class="row">
+        <label>Speed km/h <input id="d-speed" type="number" step="1" min="1"></label>
+        <span class="hint" id="d-notes"></span>
+      </div>
+      <div id="d-now" class="card"></div>
+
+      <h3>Variables</h3>
+      <div id="d-groups"></div>
+      <div class="row tight">
+        <label class="row"><input id="d-hp-on" type="checkbox" checked> Hover pitch</label>
+        <label>from <input id="d-hp-lo" type="number" step="1" value="0" style="width:60px"></label>
+        <label>to <input id="d-hp-hi" type="number" step="1" value="60" style="width:60px"></label>
+      </div>
+
+      <h3>Objective</h3>
+      <div class="row">
+        <span class="hint">Hover margin</span>
+        <input id="d-weight" type="range" min="0" max="100" value="50" style="flex:1">
+        <span class="hint">Cruise power</span>
+        <label>Samples <input id="d-samples" type="number" step="50" min="50" max="1000" value="300" style="width:70px"></label>
+        <button id="d-run" class="pill small primary">Optimize</button>
+      </div>
+      <div id="d-progress" class="hint"></div>
+      <div id="d-results"></div>
     </section>
 
     <!-- ============================ FLIGHT / SIM ============================ -->

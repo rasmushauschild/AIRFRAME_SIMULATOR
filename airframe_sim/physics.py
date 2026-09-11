@@ -16,6 +16,7 @@ from __future__ import annotations
 import numpy as np
 
 from .airframe import Airframe
+from .design import WingAero, RHO
 
 G = 9.80665
 
@@ -90,11 +91,13 @@ class RigidBodySim:
         norms[norms < 1e-9] = 1.0
         self.rotor_axis = axes / norms
         self.rotor_km = np.array([r.km for r in airframe.rotors], dtype=float)
-        self.rotor_tmax = np.array([r.max_thrust for r in airframe.rotors], dtype=float)
+        self.rotor_tmax = np.array([r.effective_max_thrust() for r in airframe.rotors], dtype=float)   # after jetfoil turning loss
         self.rotor_tau = np.array([max(r.tau, 1e-3) for r in airframe.rotors], dtype=float)
         self.rotor_exp = np.array([r.thrust_exponent for r in airframe.rotors], dtype=float)
         self.rotor_ram = np.array([bool(getattr(r, "ram_drag", False)) for r in airframe.rotors], dtype=bool)
         self.rotor_area = np.array([np.pi * (r.prop_diameter / 2) ** 2 for r in airframe.rotors], dtype=float)
+        self.rotor_mdot_coef = np.sqrt(RHO * self.rotor_area) * self.rotor_ram      # mdot = coef * sqrt(thrust)
+        self.wings = [(np.array(w.pos, float), WingAero.of(w)) for w in (airframe.wings or []) if w.enabled]
         self.drag_q = np.array(airframe.drag_quadratic, dtype=float)
         self.drag_ang = np.array(airframe.drag_angular, dtype=float)
         self.legs = np.array(airframe.leg_points, dtype=float).reshape(-1, 3)
@@ -138,18 +141,24 @@ class RigidBodySim:
         F_body += -self.drag_q * v_air_body * np.abs(v_air_body)
         M_body += -self.drag_ang * rates * np.abs(rates)
 
-        # ducted fans: momentum (ram) drag. The inlet swallows mass flow mdot = sqrt(2 rho A T); air arriving with a
-        # velocity component perpendicular to the duct axis must be turned into the duct, which costs -mdot * v_perp
-        # applied at the duct (so it also pitches/rolls the vehicle in forward flight).
+        # ducted fans: momentum (ram) drag. The inlet swallows mdot = sqrt(rho A T) of air that arrives with the
+        # vehicle's airspeed; that momentum is lost, so the duct feels -mdot * v_air applied at its position (in
+        # crossflow this is a side force that also pitches/rolls the vehicle, in axial flow it is the classic
+        # thrust loss with forward speed).
         if self.rotor_ram.any():
-            mdot = np.sqrt(2.0 * 1.225 * self.rotor_area * np.maximum(thrust, 0.0)) * self.rotor_ram
+            mdot = self.rotor_mdot_coef * np.sqrt(np.maximum(thrust, 0.0))
             for i in np.nonzero(self.rotor_ram)[0]:
                 v_pt = v_air_body + np.cross(rates, self.rotor_pos[i])
-                a = self.rotor_axis[i]
-                v_perp = v_pt - np.dot(v_pt, a) * a
-                f = -mdot[i] * v_perp
+                f = -mdot[i] * v_pt
                 F_body += f
                 M_body += np.cross(self.rotor_pos[i], f)
+
+        # wings: lift and drag from the airflow at the wing position
+        for wpos, wa in self.wings:
+            v_pt = v_air_body + np.cross(rates, wpos)
+            fw, _, _, _ = wa.force(v_pt)
+            F_body += fw
+            M_body += np.cross(wpos, fw)
 
         F_ned = R @ F_body + np.array([0.0, 0.0, self.mass * G])
 

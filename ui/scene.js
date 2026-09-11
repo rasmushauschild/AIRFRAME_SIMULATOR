@@ -64,6 +64,8 @@ export function createScene(canvas, handlers) {
   let body = null;
   let rotorNodes = [];   // { group, disc, motor, arrow, label, ring, rotorIndex }
   let legNodes = [];
+  let wingNodes = [];
+  const wingMat = new THREE.MeshStandardMaterial({ color: 0x8a8f9a, roughness: 0.6, metalness: 0.2, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
   let airframe = null;
   let selected = -1;
   let camMode = 'static';   // 'static' | 'track' (look at the drone) | 'follow' (move with it)
@@ -129,8 +131,9 @@ export function createScene(canvas, handlers) {
     gizmo.detach();
     for (const n of rotorNodes) frame.remove(n.group), frame.remove(n.arm);
     for (const l of legNodes) frame.remove(l);
+    for (const w of wingNodes) frame.remove(w);
     if (body) frame.remove(body);
-    rotorNodes = []; legNodes = [];
+    rotorNodes = []; legNodes = []; wingNodes = [];
 
     const [bx, by, bz] = af.body_size;
     body = new THREE.Mesh(new THREE.BoxGeometry(bx, bz, by), bodyMat);
@@ -151,14 +154,18 @@ export function createScene(canvas, handlers) {
         ? new THREE.Mesh(new THREE.CylinderGeometry(rad * 1.08, rad * 1.08, rad * 1.1, 40, 1, true), ductMat)
         : new THREE.Mesh(new THREE.TorusGeometry(rad, 0.003, 6, 48), r.km >= 0 ? matCCW : matCW);
       if (ducted) { ring.position.y = 0.02; } else { ring.rotation.x = Math.PI / 2; ring.position.y = 0.02; }
+      // a jetfoil duct is physically along duct_axis; the jet (arrow, disc) leaves along the thrust axis
+      const ductHolder = new THREE.Group();
+      ductHolder.add(ring);
+      orientDuct(ductHolder, group, r, rad);
       const arrow = makeThrustArrow();
       const spinArrow = makeSpinArrow(rad * 0.75, r.km >= 0);
       spinArrow.position.y = 0.024;
       const label = makeSprite(String(i + 1), document.documentElement.dataset.theme === 'dark' ? '#fafafa' : '#171717');
       label.position.set(0, 0.09, 0);
-      group.add(disc, motor, ring, arrow, spinArrow, label);
+      group.add(disc, motor, ductHolder, arrow, spinArrow, label);
       const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 1, 8), armMat);
-      const node = { group, disc, motor, arrow, ring, label, arm, spinArrow, rotorIndex: i };
+      const node = { group, disc, motor, arrow, ring, label, arm, spinArrow, ductHolder, rad, rotorIndex: i };
       updateArm(node, r);
       frame.add(group, arm);
       rotorNodes.push(node);
@@ -174,7 +181,31 @@ export function createScene(canvas, handlers) {
       frame.add(leg, foot);
       legNodes.push(leg, foot);
     }
+    for (const w of af.wings || []) {
+      if (!w.enabled || !(w.area > 0) || !(w.span > 0)) continue;
+      // delta planform: root chord from area and span, aerodynamic centre 2/3 of the root chord behind the apex
+      const c = 2 * w.area / w.span, apex = c * 2 / 3;
+      const pts = [[apex, 0, 0], [apex - c, w.span / 2, 0], [apex - c, -w.span / 2, 0]];
+      const inc = (w.incidence_deg || 0) * Math.PI / 180;
+      const verts = pts.map(([x, y, z]) => frdToThree([w.pos[0] + x * Math.cos(inc), w.pos[1] + y, w.pos[2] - x * Math.sin(inc)]));
+      const geo = new THREE.BufferGeometry().setFromPoints(verts);
+      geo.setIndex([0, 1, 2]); geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, wingMat);
+      const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(verts), new THREE.LineBasicMaterial({ color: 0x6b6f7a }));
+      frame.add(mesh, edge);
+      wingNodes.push(mesh, edge);
+    }
     if (keepSel >= 0 && keepSel < rotorNodes.length) select(keepSel);
+  }
+
+  // a jetfoil duct is physically along duct_axis (the fan sits upstream of the bend); the jet leaves along the thrust axis
+  function orientDuct(holder, group, r, rad) {
+    holder.quaternion.identity();
+    holder.children[0].position.y = 0.02;
+    if (r.kind === 'ducted' && r.duct_axis) {
+      holder.quaternion.copy(group.quaternion).invert().multiply(new THREE.Quaternion().setFromUnitVectors(UP, frdToThree(r.duct_axis).normalize()));
+      holder.children[0].position.y = rad * 0.7;
+    }
   }
 
   function updateArm(node, r) {
@@ -193,6 +224,7 @@ export function createScene(canvas, handlers) {
     n.group.quaternion.setFromUnitVectors(UP, frdToThree(r.axis).normalize());
     const m = r.km >= 0 ? matCCW : matCW;
     n.disc.material = m; if (r.kind !== 'ducted') n.ring.material = m;
+    orientDuct(n.ductHolder, n.group, r, n.rad);
     updateArm(n, r);
   }
 

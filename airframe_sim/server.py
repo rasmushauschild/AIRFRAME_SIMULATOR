@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import airframe as af_mod
 from .airframe import Airframe
+from . import design
 from .link import mavlink
 from . import param_meta
 
@@ -69,6 +70,7 @@ class AppState:
         self.meta: dict[str, dict] = {}
         self.meta_source = ""
         self.export_log: deque = deque(maxlen=500)
+        self.opt_job: dict = {"running": False, "progress": 0.0, "message": "", "result": None, "error": None}
 
     @property
     def link(self):
@@ -206,6 +208,79 @@ def build_app(state: AppState) -> FastAPI:
         af.inertia = af.estimate_inertia()
         sim.set_airframe(af)
         return {"ok": True, "inertia": af.inertia}
+
+    # ---------------------------------------------------------------- design
+    def design_speed(body: dict | None) -> float:
+        kmh = (body or {}).get("speed_kmh")
+        if kmh is None:
+            kmh = sim.airframe.design.get("cruise_speed_kmh", 50.0)
+        return float(kmh) / 3.6
+
+    def design_notes(speed: float) -> list[str]:
+        """Things PX4 must allow for the cruise case: velocity limits and tilt."""
+        notes = []
+        v = link.params.get("MPC_XY_VEL_MAX", {}).get("value")
+        if v is not None and speed > float(v) + 1e-6:
+            notes.append(f"MPC_XY_VEL_MAX is {float(v):g} m/s, cruise needs {speed:.1f} m/s")
+        c = link.params.get("MPC_XY_CRUISE", {}).get("value")
+        if c is not None and speed > float(c) + 1e-6:
+            notes.append(f"MPC_XY_CRUISE is {float(c):g} m/s, missions fly at that speed")
+        return notes
+
+    @app.post("/api/design/analysis")
+    async def design_analysis(body: dict | None = None):
+        body = body or {}
+        if "airframe" in body:
+            try:
+                af = Airframe.from_dict(body["airframe"])
+            except Exception as e:
+                return JSONResponse({"ok": False, "error": f"invalid airframe: {e}"}, status_code=400)
+        else:
+            af = sim.airframe
+        speed = design_speed(body)
+        r = await run_in_threadpool(design.analyse, af, speed)
+        r["notes"] = design_notes(speed)
+        tilt = link.params.get("MPC_TILTMAX_AIR", {}).get("value")
+        r["tilt_limit_deg"] = float(tilt) if tilt is not None else 45.0
+        r["groups"] = design.default_groups(af)
+        return r
+
+    @app.post("/api/design/optimize")
+    async def design_optimize(body: dict):
+        job = state.opt_job
+        if job["running"]:
+            return JSONResponse({"ok": False, "error": "an optimisation is already running"}, status_code=409)
+        try:
+            af = Airframe.from_dict(body["airframe"]) if "airframe" in body else sim.airframe
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": f"invalid airframe: {e}"}, status_code=400)
+        spec = dict(body.get("spec") or {})
+        spec.setdefault("speed_kmh", af.design.get("cruise_speed_kmh", 50.0))
+        tilt = link.params.get("MPC_TILTMAX_AIR", {}).get("value")
+        spec.setdefault("tilt_limit_deg", float(tilt) if tilt is not None else 45.0)
+        job.update(running=True, progress=0.0, message="starting", result=None, error=None)
+
+        def progress(frac, msg):
+            job["progress"], job["message"] = float(frac), str(msg)
+
+        def run():
+            try:
+                job["result"] = design.optimise(af, spec, progress)
+            except Exception as e:
+                job["error"] = f"{type(e).__name__}: {e}"
+                state.log(f"[design] optimisation failed: {e}")
+            finally:
+                job["running"] = False
+
+        import threading
+        threading.Thread(target=run, name="design-optimise", daemon=True).start()
+        return {"ok": True}
+
+    @app.get("/api/design/optimize")
+    async def design_optimize_status():
+        j = state.opt_job
+        return {"running": j["running"], "progress": j["progress"], "message": j["message"],
+                "result": j["result"], "error": j["error"]}
 
     # ------------------------------------------------------------ connection
     @app.get("/api/connection")

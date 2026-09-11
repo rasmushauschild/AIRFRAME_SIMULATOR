@@ -51,7 +51,19 @@ class Rotor:
     prop_diameter: float = 0.25  # m, visual + disc area (fan diameter for a duct)
     thrust_exponent: float = 2.0  # thrust = max_thrust * omega_norm ** exponent
     kind: str = "prop"          # "prop" | "ducted"
-    ram_drag: bool = False      # momentum drag of the inlet mass flow in crossflow (ducted fans)
+    ram_drag: bool = False      # momentum drag of the inlet mass flow (ducted fans)
+    duct_axis: list[float] | None = None   # physical fan axis (undeflected thrust direction) when a jetfoil turns the jet to ``axis``
+    turn_loss: float = 0.1      # fraction of thrust lost when the jetfoil turns the jet by 90 degrees
+
+    def deflection_deg(self) -> float:
+        """Angle the jetfoil bends the jet: between the duct axis and the thrust axis (0 without a jetfoil)."""
+        if not self.duct_axis:
+            return 0.0
+        a, d = _unit(self.axis), _unit(self.duct_axis)
+        return math.degrees(math.acos(max(-1.0, min(1.0, sum(x * y for x, y in zip(a, d))))))
+
+    def effective_max_thrust(self) -> float:
+        return self.max_thrust * max(0.0, 1.0 - self.turn_loss * self.deflection_deg() / 90.0)
 
     def set_kind(self, kind: str) -> "Rotor":
         d = ROTOR_KINDS.get(kind, ROTOR_KINDS["prop"])
@@ -67,6 +79,19 @@ class Rotor:
     @property
     def ccw(self) -> bool:
         return self.km >= 0.0
+
+
+@dataclass
+class Wing:
+    """A lifting surface (delta by default), acting at ``pos`` in the structural frame."""
+    pos: list[float] = field(default_factory=lambda: [-0.2, 0.0, 0.05])   # aerodynamic centre, m FRD
+    area: float = 0.5          # m^2, total
+    span: float = 1.07         # m tip to tip
+    incidence_deg: float = 10.0  # chord above the structural x axis, nose-up positive
+    cd0: float = 0.02
+    stall_deg: float = 30.0
+    vortex_lift: bool = True   # sharp leading edge (delta): Polhamus vortex lift
+    enabled: bool = True
 
 
 @dataclass
@@ -86,6 +111,8 @@ class Airframe:
     landed_pitch_deg: float = 0.0  # nose-up pitch of the structural frame when standing on its feet
     leg_height: float = 0.2        # feet: distance below the CG (measured along the landed "down")
     leg_spread: float = 0.2        # feet: half-width / half-length of the foot rectangle
+    wings: list[Wing] = field(default_factory=list)
+    design: dict = field(default_factory=dict)   # optimiser settings (cruise speed, rotor groups, ranges), saved with the airframe
 
     def generate_legs(self) -> list[list[float]]:
         """Four feet on a plane perpendicular to gravity when the airframe stands at landed_pitch_deg,
@@ -123,9 +150,11 @@ class Airframe:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Airframe":
         d = dict(d)
-        rotors = [Rotor(**r).normalized() for r in d.pop("rotors", [])]
+        rotors = [Rotor(**{k: v for k, v in r.items() if k in Rotor.__dataclass_fields__}).normalized() for r in d.pop("rotors", [])]
+        wings = [Wing(**{k: v for k, v in w.items() if k in Wing.__dataclass_fields__}) for w in d.pop("wings", []) or []]
         af = cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
         af.rotors = rotors
+        af.wings = wings
         return af
 
     @classmethod
@@ -146,7 +175,7 @@ class Airframe:
             problems.append("mass must be positive")
         if any(i <= 0 for i in self.inertia):
             problems.append("inertia diagonal must be positive")
-        total = sum(r.max_thrust for r in self.rotors)
+        total = sum(r.effective_max_thrust() for r in self.rotors)
         if total < self.mass * 9.81 * 1.2:
             problems.append(f"thrust/weight is {total / (self.mass * 9.81):.2f}, hover will be marginal")
         return problems
@@ -229,7 +258,7 @@ class Airframe:
         thrust_up = float(-(E[5] @ u))                     # unit-CT thrust per unit u
         scale = weight / thrust_up if thrust_up > 1e-9 else float("inf")
         hover_thrust = [float(v * scale) for v in u]
-        util = [t / r.max_thrust if r.max_thrust > 0 else float("inf") for t, r in zip(hover_thrust, self.rotors)]
+        util = [t / r.effective_max_thrust() if r.effective_max_thrust() > 0 else float("inf") for t, r in zip(hover_thrust, self.rotors)]
         over = [i + 1 for i, x in enumerate(util) if x > 0.85]
         problems = []
         force_resid = float(np.abs(resid[3:5]).max())

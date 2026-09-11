@@ -41,6 +41,7 @@ $$('.tabs button').forEach(b => b.addEventListener('click', () => {
   $$('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
   if (b.dataset.tab === 'airframe') { ensureParams(); loadExport(); }
   if (b.dataset.tab === 'connect') refreshConnection();
+  if (b.dataset.tab === 'design') refreshDesign();
 }));
 function openTab(name) { $$('.tabs button').find(b => b.dataset.tab === name)?.click(); }
 
@@ -55,6 +56,7 @@ function pushAirframe(immediate = false) {
       showHover(res.hover);
       markDirty();
       loadExport();
+      if ($('#tab-design').classList.contains('active')) refreshDesign();
     } catch (e) { logLine('[ui] airframe rejected: ' + e.message); }
   };
   if (immediate) doPush(); else pushTimer = setTimeout(doPush, 120);
@@ -84,6 +86,11 @@ function setAirframe(af) {
   $('#af-landed').value = af.landed_pitch_deg || 0;
   $('#af-legz').value = af.leg_height ?? 0.2;
   $('#af-legxy').value = af.leg_spread ?? 0.2;
+  airframe.wings = airframe.wings || [];
+  airframe.design = airframe.design || {};
+  designGroups = null;
+  fillWingCard();
+  $('#d-speed').value = airframe.design.cruise_speed_kmh ?? 50;
   renderRotorTable();
   renderMotorSliders();
   fillMotorCard();
@@ -96,16 +103,36 @@ function fillMotorCard() {
   const r = airframe.rotors[selected >= 0 ? selected : 0]; if (!r) return;
   $('#m-kind').value = r.kind || 'prop'; $('#m-tmax').value = r.max_thrust; $('#m-tau').value = r.tau;
   $('#m-km').value = Math.abs(r.km); $('#m-dia').value = r.prop_diameter; $('#m-exp').value = r.thrust_exponent; $('#m-ram').checked = !!r.ram_drag;
+  $('#m-turnloss').value = Math.round((r.turn_loss ?? 0.1) * 100);
 }
 function applyMotorCard(kindChanged) {
   const kind = $('#m-kind').value;
   if (kindChanged) { const d = KIND_DEFAULTS[kind]; $('#m-tau').value = d.tau; $('#m-km').value = d.km; $('#m-dia').value = d.prop_diameter; $('#m-exp').value = d.thrust_exponent; $('#m-ram').checked = d.ram_drag; }
   const tmax = +$('#m-tmax').value, tau = +$('#m-tau').value, km = Math.abs(+$('#m-km').value), dia = +$('#m-dia').value, ex = +$('#m-exp').value, ram = $('#m-ram').checked;
-  airframe.rotors.forEach(r => { r.kind = kind; r.max_thrust = tmax; r.tau = tau; r.km = (r.km >= 0 ? 1 : -1) * km; r.prop_diameter = dia; r.thrust_exponent = ex; r.ram_drag = ram; });
+  const turnLoss = Math.max(0, +$('#m-turnloss').value) / 100;
+  airframe.rotors.forEach(r => { r.kind = kind; r.max_thrust = tmax; r.tau = tau; r.km = (r.km >= 0 ? 1 : -1) * km; r.prop_diameter = dia; r.thrust_exponent = ex; r.ram_drag = ram; r.turn_loss = turnLoss; if (kind !== 'ducted') r.duct_axis = null; });
   setAirframe(airframe); pushAirframe(true);
 }
 $('#m-kind').addEventListener('change', () => applyMotorCard(true));
-['m-tmax', 'm-tau', 'm-km', 'm-dia', 'm-exp', 'm-ram'].forEach(id => $('#' + id).addEventListener('change', () => applyMotorCard(false)));
+['m-tmax', 'm-tau', 'm-km', 'm-dia', 'm-exp', 'm-ram', 'm-turnloss'].forEach(id => $('#' + id).addEventListener('change', () => applyMotorCard(false)));
+
+// ---- wing
+const WING_DEFAULT = { pos: [-0.2, 0, 0.06], area: 0.5, span: 1.074, incidence_deg: 10, cd0: 0.02, stall_deg: 30, vortex_lift: true, enabled: true };
+function fillWingCard() {
+  const w = (airframe.wings && airframe.wings[0]) || { ...WING_DEFAULT, enabled: false };
+  $('#w-on').checked = !!w.enabled; $('#w-area').value = w.area; $('#w-span').value = w.span; $('#w-inc').value = w.incidence_deg;
+  $('#w-cd0').value = w.cd0; $('#w-stall').value = w.stall_deg; $('#w-vortex').checked = !!w.vortex_lift;
+  $('#w-x').value = w.pos[0]; $('#w-y').value = w.pos[1]; $('#w-z').value = w.pos[2];
+}
+function applyWingCard() {
+  if (!airframe.wings.length) airframe.wings.push({ ...WING_DEFAULT });
+  const w = airframe.wings[0];
+  w.enabled = $('#w-on').checked; w.area = +$('#w-area').value; w.span = +$('#w-span').value; w.incidence_deg = +$('#w-inc').value;
+  w.cd0 = +$('#w-cd0').value; w.stall_deg = +$('#w-stall').value; w.vortex_lift = $('#w-vortex').checked;
+  w.pos = [+$('#w-x').value, +$('#w-y').value, +$('#w-z').value];
+  scene.setAirframe(airframe); pushAirframe(true);
+}
+['w-on', 'w-area', 'w-span', 'w-inc', 'w-cd0', 'w-stall', 'w-vortex', 'w-x', 'w-y', 'w-z'].forEach(id => $('#' + id).addEventListener('change', applyWingCard));
 
 function bindNumber(id, fn) {
   $('#' + id).addEventListener('change', (e) => { fn(parseFloat(e.target.value)); scene.setAirframe(airframe); pushAirframe(true); });
@@ -172,12 +199,12 @@ const tiltToAxis = (tilt, dir) => {
 function renderRotorTable() {
   const el = $('#rotor-table');
   const rows = airframe.rotors.map((r, i) => rotorRowHtml(i, r)).join('');
-  el.innerHTML = `<table class="grid"><thead><tr><th>#</th><th title="position, m">X</th><th>Y</th><th>Z</th><th title="tilt from vertical, degrees">Tilt°</th><th title="direction of tilt: 0 = forward, 90 = right, 180 = back, -90 = left">Dir°</th><th title="resulting unit thrust vector = CA_ROTORn_AX / AY / AZ">Axis AX AY AZ</th><th>Spin</th><th title="max thrust N">Tmax</th><th title="share of max thrust this rotor needs to hover, as PX4's allocator would solve it">Hover</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML = `<table class="grid"><thead><tr><th>#</th><th title="position, m">X</th><th>Y</th><th>Z</th><th title="tilt from vertical, degrees">Tilt°</th><th title="direction of tilt: 0 = forward, 90 = right, 180 = back, -90 = left">Dir°</th><th title="resulting unit thrust vector = CA_ROTORn_AX / AY / AZ">Axis AX AY AZ</th><th title="ducted fans: the fan along the thrust (jet), or a horizontal fan whose jetfoil bends the jet to the thrust axis (foil)">Duct</th><th>Spin</th><th title="max thrust N">Tmax</th><th title="share of max thrust this rotor needs to hover, as PX4's allocator would solve it">Hover</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   api('/api/airframe/hover_check').then(showHover).catch(() => { });
   el.querySelectorAll('tr[data-i]').forEach(tr => {
     const i = +tr.dataset.i;
     tr.addEventListener('click', (e) => { if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('spin') && !e.target.classList.contains('del')) { selected = i; scene.select(i); renderRotorTable(); renderReadout(); } });
-    tr.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => applyRow(i, tr)));
+    tr.querySelectorAll('input, select').forEach(inp => inp.addEventListener('change', () => applyRow(i, tr)));
     tr.querySelector('.spin').addEventListener('click', () => { airframe.rotors[i].km = -airframe.rotors[i].km; scene.updateRotorNode(i, airframe.rotors[i]); renderRotorTable(); pushAirframe(true); });
     tr.querySelector('.del').addEventListener('click', () => { airframe.rotors.splice(i, 1); selected = -1; setAirframe(airframe); pushAirframe(true); });
   });
@@ -193,6 +220,7 @@ function rotorRowHtml(i, r) {
   <td><input type="number" step="1" data-k="tilt" value="${+tilt.toFixed(1)}"></td>
   <td><input type="number" step="5" data-k="dir" value="${+dir.toFixed(1)}"></td>
   <td class="axis" title="CA_ROTOR${i}_AX / AY / AZ">${axisText(r.axis)}</td>
+  <td>${r.kind === 'ducted' ? `<select data-k="duct"><option value="jet" ${r.duct_axis ? '' : 'selected'}>jet</option><option value="foil" ${r.duct_axis ? 'selected' : ''}>foil</option></select>` : ''}</td>
   <td><span class="spin ${ccw ? 'ccw' : 'cw'}" title="click to flip (KM=${r.km})">${ccw ? 'CCW' : 'CW'}</span></td>
   <td><input type="number" step="0.5" data-k="tmax" value="${r.max_thrust}"></td>
   <td class="hover"></td>
@@ -213,6 +241,8 @@ function applyRow(i, tr) {
   r.pos = [g('x'), g('y'), g('z')];
   r.axis = tiltToAxis(g('tilt'), g('dir'));
   r.max_thrust = g('tmax');
+  const duct = tr.querySelector('select[data-k="duct"]');
+  if (duct) r.duct_axis = duct.value === 'foil' ? [1, 0, 0] : null;
   scene.updateRotorNode(i, r);
   renderRotorRow(i);
   renderReadout();
@@ -224,7 +254,13 @@ function renderReadout() {
   const r = airframe.rotors[selected];
   const [tilt, dir] = axisToTilt(r.axis);
   el.classList.add('show');
-  el.innerHTML = `<b>Motor ${selected + 1}</b> pos [${r.pos.map(v => fmt(v)).join(', ')}] · axis [${r.axis.map(v => fmt(v, 3)).join(', ')}] (${tilt.toFixed(1)}° from vertical) · ${r.km >= 0 ? 'CCW' : 'CW'} · CA_ROTOR${selected}_*`;
+  let foil = '';
+  if (r.duct_axis) {
+    const a = r.axis, d = r.duct_axis, na = Math.hypot(...a) || 1, nd = Math.hypot(...d) || 1;
+    const bend = deg(Math.acos(Math.max(-1, Math.min(1, (a[0] * d[0] + a[1] * d[1] + a[2] * d[2]) / (na * nd)))));
+    foil = ` · jetfoil bends ${bend.toFixed(0)}° (${((1 - (r.turn_loss ?? 0.1) * bend / 90) * 100).toFixed(0)}% thrust)`;
+  }
+  el.innerHTML = `<b>Motor ${selected + 1}</b> pos [${r.pos.map(v => fmt(v)).join(', ')}] · axis [${r.axis.map(v => fmt(v, 3)).join(', ')}] (${tilt.toFixed(1)}° from vertical)${foil} · ${r.km >= 0 ? 'CCW' : 'CW'} · CA_ROTOR${selected}_*`;
 }
 $('#rotor-add').addEventListener('click', () => {
   const base = airframe.rotors[selected] || airframe.rotors[airframe.rotors.length - 1] || { pos: [0.2, 0, 0], axis: [0, 0, -1], km: 0.05, max_thrust: 8, tau: 0.04, prop_diameter: 0.25, thrust_exponent: 2, kind: 'prop', ram_drag: false };
@@ -248,6 +284,130 @@ $('#rotor-apply-all').addEventListener('click', () => {
   airframe.rotors.forEach(r => { r.max_thrust = s.max_thrust; r.tau = s.tau; r.prop_diameter = s.prop_diameter; r.thrust_exponent = s.thrust_exponent; r.kind = s.kind; r.ram_drag = s.ram_drag; r.km = (r.km >= 0 ? 1 : -1) * Math.abs(s.km); });
   setAirframe(airframe); pushAirframe(true);
 });
+
+// ============================================================ design / optimize
+let designTimer = null, designGroups = null, optPoll = null, lastAnalysis = null;
+const pct = (v) => (v == null || !isFinite(v)) ? '—' : (v * 100).toFixed(0) + '%';
+const num = (v, d = 1, unit = '') => (v == null || !isFinite(v)) ? '—' : v.toFixed(d) + unit;
+function designSpec() {
+  const groups = {};
+  for (const [name, g] of Object.entries(designGroups || {})) {
+    const row = $(`#d-groups tr[data-g="${name}"]`);
+    const on = (k) => row && row.querySelector(`input[data-k="${k}-on"]`).checked;
+    const rng = (k) => [+row.querySelector(`input[data-k="${k}-lo"]`).value, +row.querySelector(`input[data-k="${k}-hi"]`).value];
+    groups[name] = { rotors: g.rotors, tilt: on('tilt') ? rng('tilt') : null, cant: on('cant') ? rng('cant') : null };
+  }
+  return { groups, hover_pitch: $('#d-hp-on').checked ? [+$('#d-hp-lo').value, +$('#d-hp-hi').value] : null,
+           weight: 1 - (+$('#d-weight').value) / 100, speed_kmh: +$('#d-speed').value, samples: +$('#d-samples').value, refine: 6 };
+}
+function groupsFromRotors() {   // saved assignment (airframe.design.groups) if it still fits the rotor count, else the server's default
+  const saved = airframe.design && airframe.design.groups;
+  if (saved && Object.values(saved).flatMap(g => g.rotors).length === airframe.rotors.length) return JSON.parse(JSON.stringify(saved));
+  return lastAnalysis ? JSON.parse(JSON.stringify(lastAnalysis.groups)) : null;
+}
+function renderGroups() {
+  if (!designGroups) return;
+  const rows = Object.entries(designGroups).map(([name, g]) => {
+    const r0 = airframe.rotors[g.rotors[0]]; const [tilt] = r0 ? axisToTilt(r0.axis) : [0];
+    const cant = r0 ? deg(Math.atan2(Math.abs(r0.axis[1]), -r0.axis[2])) : 0;
+    const prev = g.ui || {};
+    return `<tr data-g="${name}"><td class="idx">${name}</td><td class="motors">${g.rotors.map(i => 'M' + (i + 1)).join(' ')}</td>
+      <td><input type="checkbox" data-k="tilt-on" ${prev.tilt === false ? '' : 'checked'}> <span class="num">${tilt.toFixed(0)}°</span></td>
+      <td><input type="number" data-k="tilt-lo" value="${prev.tiltLo ?? 0}"> – <input type="number" data-k="tilt-hi" value="${prev.tiltHi ?? 90}"></td>
+      <td><input type="checkbox" data-k="cant-on" ${prev.cant ? 'checked' : ''}> <span class="num">${cant.toFixed(0)}°</span></td>
+      <td><input type="number" data-k="cant-lo" value="${prev.cantLo ?? 0}"> – <input type="number" data-k="cant-hi" value="${prev.cantHi ?? 30}"></td></tr>`;
+  }).join('');
+  const motorRow = airframe.rotors.map((r, i) => {
+    const g = Object.entries(designGroups).find(([, g]) => g.rotors.includes(i));
+    return `<label class="row tight" style="gap:2px"><span class="hint">M${i + 1}</span><input type="text" data-m="${i}" value="${g ? g[0] : ''}" maxlength="1"></label>`;
+  }).join('');
+  $('#d-groups').innerHTML = `<table class="grid"><thead><tr><th>Group</th><th>Motors</th><th title="tilt from vertical, forward/back">Tilt</th><th>Range°</th><th title="lateral cant, symmetric left/right">Cant</th><th>Range°</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="row tight" style="margin-top:6px">${motorRow}</div>`;
+  $$('#d-groups input[data-m]').forEach(inp => inp.addEventListener('change', () => {
+    const letter = inp.value.trim().toUpperCase() || 'A'; const i = +inp.dataset.m;
+    for (const g of Object.values(designGroups)) g.rotors = g.rotors.filter(k => k !== i);
+    (designGroups[letter] = designGroups[letter] || { rotors: [] }).rotors.push(i);
+    for (const k of Object.keys(designGroups)) if (!designGroups[k].rotors.length) delete designGroups[k];
+    designGroups = Object.fromEntries(Object.keys(designGroups).sort().map(k => [k, designGroups[k]]));
+    saveGroups(); renderGroups();
+  }));
+  $$('#d-groups tr[data-g] input').forEach(inp => inp.addEventListener('change', saveGroups));
+}
+function saveGroups() {
+  for (const [name, g] of Object.entries(designGroups)) {
+    const row = $(`#d-groups tr[data-g="${name}"]`); if (!row) continue;
+    const v = (k) => row.querySelector(`input[data-k="${k}"]`);
+    g.ui = { tilt: v('tilt-on').checked, tiltLo: +v('tilt-lo').value, tiltHi: +v('tilt-hi').value, cant: v('cant-on').checked, cantLo: +v('cant-lo').value, cantHi: +v('cant-hi').value };
+  }
+  airframe.design.groups = designGroups;
+}
+async function refreshDesign() {
+  clearTimeout(designTimer);
+  designTimer = setTimeout(async () => {
+    if (!airframe) return;
+    let r;
+    try { r = await api('/api/design/analysis', { airframe, speed_kmh: +$('#d-speed').value }); } catch (e) { $('#d-now').textContent = e.message; return; }
+    lastAnalysis = r;
+    if (!designGroups) designGroups = groupsFromRotors(); else saveGroups();
+    if (!document.activeElement || !document.activeElement.closest('#d-groups')) renderGroups();   // refresh current angles
+    renderNow(r);
+  }, 80);
+}
+function renderNow(r) {
+  const h = r.hover, c = r.cruise;
+  const auth = h.authority || {};
+  const probs = [...(h.problems || []), ...(c.problems || []), ...(r.notes || [])];
+  $('#d-notes').textContent = '';
+  $('#d-now').innerHTML = `<h4>Hover · ${airframe.hover_pitch_deg || 0}° nose-up</h4><div class="kv">
+      <div><span>Busiest motor</span><span class="${h.max_util > 0.85 ? 'err' : ''}">${pct(h.max_util)}</span></div>
+      <div><span>Wasted thrust</span><span>${pct(h.waste)}</span></div>
+      <div><span>Power</span><span>${num(h.power, 0, ' W')}</span></div>
+      <div><span>Roll / pitch / yaw</span><span>${num(auth.roll, 1)} / ${num(auth.pitch, 1)} / ${num(auth.yaw, 1)} Nm</span></div></div>
+    <h4>Cruise · ${(r.airspeed * 3.6).toFixed(0)} km/h</h4><div class="kv">
+      <div><span>Body pitch</span><span>${num(c.pitch_deg, 1, '°')}</span></div>
+      <div><span>PX4 pitch</span><span class="${Math.abs(c.px4_pitch_deg) > (r.tilt_limit_deg || 45) ? 'err' : ''}">${num(c.px4_pitch_deg, 1, '°')}</span></div>
+      <div><span>Busiest motor</span><span class="${c.max_util > 0.85 ? 'err' : ''}">${pct(c.max_util)}</span></div>
+      <div><span>Power vs hover</span><span>${pct(c.power_ratio)}</span></div>
+      <div><span>Total thrust</span><span>${num(c.total_thrust, 0, ' N')}</span></div>
+      <div><span>Wing lift</span><span>${pct(c.lift_share)} of weight</span></div>
+      <div><span>Wing AoA</span><span>${num(c.alpha_deg, 1, '°')}</span></div>
+      <div><span>Ram / wing / body drag</span><span>${num(c.ram_drag, 0)} / ${num(c.wing_drag, 0)} / ${num(c.body_drag, 0)} N</span></div></div>
+    ${probs.length ? `<div class="problems">⚠ ${probs.join('<br>⚠ ')}</div>` : ''}`;
+}
+$('#d-speed').addEventListener('change', () => { airframe.design.cruise_speed_kmh = +$('#d-speed').value; pushAirframe(true); });
+$('#d-run').addEventListener('click', async () => {
+  saveGroups();
+  const spec = designSpec();
+  $('#d-run').disabled = true; $('#d-progress').textContent = 'starting…'; $('#d-results').innerHTML = '';
+  try { await api('/api/design/optimize', { airframe, spec }); } catch (e) { $('#d-progress').textContent = e.message; $('#d-run').disabled = false; return; }
+  clearInterval(optPoll);
+  optPoll = setInterval(async () => {
+    let j; try { j = await api('/api/design/optimize'); } catch { return; }
+    if (j.running) { $('#d-progress').textContent = `${j.message} · ${Math.round(j.progress * 100)}%`; return; }
+    clearInterval(optPoll); $('#d-run').disabled = false;
+    if (j.error) { $('#d-progress').textContent = j.error; return; }
+    if (j.result && j.result.ok === false) { $('#d-progress').textContent = j.result.error; return; }
+    if (j.result) renderResults(j.result);
+  }, 400);
+});
+function renderResults(res) {
+  $('#d-progress').textContent = `${res.evaluated} designs evaluated, ${res.feasible} feasible`;
+  const vars = res.variables;
+  const head = vars.map(v => `<th>${v.kind === 'hover_pitch' ? 'Hover°' : v.group + ' ' + v.kind + '°'}</th>`).join('');
+  const row = (m, i, cls, label) => `<tr class="${cls}"><td class="idx">${label}</td>${m.x.map(x => `<td class="num">${x.toFixed(1)}</td>`).join('')}
+    <td class="num ${m.hover.ok ? '' : 'err'}">${pct(m.hover.max_util)}</td><td class="num">${num(m.hover.authority.yaw, 1)}</td>
+    <td class="num ${m.cruise.converged ? '' : 'err'}">${pct(m.cruise.power_ratio)}</td><td class="num">${num(m.cruise.px4_pitch_deg, 0, '°')}</td><td class="num">${pct(m.cruise.lift_share)}</td>
+    <td class="num">${pct(m.cruise.max_util)}</td><td>${i >= 0 ? `<button class="pill small" data-apply="${i}">Apply</button>` : ''}</td></tr>`;
+  $('#d-results').innerHTML = `<table class="grid"><thead><tr><th></th>${head}<th title="busiest motor in hover">Hover</th><th title="yaw torque available in hover, Nm">Yaw</th><th title="cruise power relative to hover power">Cruise</th><th>PX4 pitch</th><th>Wing</th><th title="busiest motor in cruise">Motor</th><th></th></tr></thead>
+    <tbody>${row(res.current, -1, 'current', 'now')}${res.results.map((m, i) => row(m, i, m.pareto ? 'pareto' : '', String(i + 1))).join('')}</tbody></table>`;
+  $$('#d-results button[data-apply]').forEach(b => b.addEventListener('click', () => {
+    const m = res.results[+b.dataset.apply];
+    m.axes.forEach((a, i) => { if (airframe.rotors[i]) airframe.rotors[i].axis = a; });
+    airframe.hover_pitch_deg = m.hover_pitch_deg;
+    setAirframe(airframe); pushAirframe(true);
+    b.textContent = 'Applied'; setTimeout(() => b.textContent = 'Apply', 1500);
+  }));
+}
 
 // ============================================================ PX4 export
 async function loadExport() {

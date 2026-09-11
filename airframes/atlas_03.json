@@ -61,7 +61,13 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "turn_loss": 0.1
     },
     {
       "pos": [
@@ -80,7 +86,13 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "turn_loss": 0.1
     },
     {
       "pos": [
@@ -99,7 +111,13 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "turn_loss": 0.1
     },
     {
       "pos": [
@@ -118,7 +136,13 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "turn_loss": 0.1
     },
     {
       "pos": [
@@ -137,7 +161,13 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "turn_loss": 0.1
     },
     {
       "pos": [
@@ -156,7 +186,13 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "turn_loss": 0.1
     },
     {
       "pos": [
@@ -175,7 +211,13 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "turn_loss": 0.1
     },
     {
       "pos": [
@@ -194,7 +236,13 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "turn_loss": 0.1
     },
     {
       "pos": [
@@ -213,7 +261,9 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": null,
+      "turn_loss": 0.1
     },
     {
       "pos": [
@@ -232,7 +282,9 @@
       "prop_diameter": 0.08,
       "thrust_exponent": 2,
       "kind": "ducted",
-      "ram_drag": true
+      "ram_drag": true,
+      "duct_axis": null,
+      "turn_loss": 0.1
     }
   ],
   "hover_pitch_deg": 25,
@@ -244,5 +296,24 @@
   },
   "landed_pitch_deg": 0,
   "leg_height": 0.2,
-  "leg_spread": 0.2
+  "leg_spread": 0.2,
+  "wings": [
+    {
+      "pos": [
+        -0.2,
+        0.0,
+        0.06
+      ],
+      "area": 0.5,
+      "span": 1.075,
+      "incidence_deg": 10.0,
+      "cd0": 0.02,
+      "stall_deg": 30.0,
+      "vortex_lift": true,
+      "enabled": true
+    }
+  ],
+  "design": {
+    "cruise_speed_kmh": 50.0
+  }
 }

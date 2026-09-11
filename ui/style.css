@@ -316,3 +316,20 @@ button.pill.armed:hover { filter: brightness(0.92); background: var(--red); colo
 #motor-sliders label b { width: 30px; color: var(--text); }
 #motor-sliders .mv { width: 42px; text-align: right; color: var(--text-2); }
 #motor-sliders input[type=range]:disabled { opacity: 0.85; }
+
+/* design / optimize */
+#d-now .kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 14px; font-size: 13px; }
+#d-now .kv div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid var(--line); }
+#d-now .kv div span:last-child { font-variant-numeric: tabular-nums; font-weight: 600; }
+#d-now .kv div span:first-child { color: var(--text-2); }
+#d-now h4, #d-groups h4 { font-size: 12px; font-weight: 700; margin: 8px 0 4px; color: var(--text); }
+#d-now h4:first-child { margin-top: 0; }
+#d-groups input[type=number] { width: 54px; padding: 4px 5px; font-size: 12px; box-shadow: none; background: transparent; border-radius: 7px; }
+#d-groups input[type=text] { width: 34px; padding: 4px 5px; font-size: 12px; text-align: center; font-weight: 700; }
+#d-groups td.motors { color: var(--text-2); font-size: 12px; }
+#d-results { overflow-x: auto; margin: 0 -6px; padding: 0 6px; }
+#d-results table.grid td, #d-results table.grid th { white-space: nowrap; padding: 3px 5px; }
+#d-results tr.pareto td.idx::after { content: '●'; color: var(--accent); margin-left: 4px; font-size: 9px; vertical-align: middle; }
+#d-results tr.current td { color: var(--text-2); }
+#rotor-table select { padding: 3px 4px; font-size: 11px; box-shadow: none; background: transparent; border-radius: 7px; width: 56px; }
+input[type=range] { accent-color: var(--accent); }

@@ -146,10 +146,26 @@ Each rotor has a `kind`. The **Motors** card on the Geometry tab switches all ro
 | fan / prop diameter | 0.25 m | 0.12 m |
 | ram (momentum) drag | off | on |
 
-Ram drag models the duct swallowing a mass flow `mdot = sqrt(2 rho A T)`: any airflow arriving perpendicular to the
-duct axis is turned into the duct, which costs `-mdot * v_perp` at the duct location. It slows the vehicle in forward
-flight and, because it acts at the ducts rather than the CG, it also pitches/rolls a layout with ducts above or below
-the CG. PX4 does not know about this; it just sees the resulting motion through the simulated sensors.
+Ram drag models the duct swallowing a mass flow `mdot = sqrt(rho A T)` that arrives with the vehicle's airspeed and
+loses that momentum: `-mdot * v_air` at the duct location. In crossflow it is a side force that also pitches/rolls a
+layout with ducts above or below the CG; in axial flow it is the thrust loss every jet has with forward speed. PX4 does
+not know about this; it just sees the resulting motion through the simulated sensors.
+
+### Jetfoils (horizontal fans, deflected jets)
+
+A ducted fan can be mounted horizontally with a jetfoil that bends the jet to the thrust direction. Set the rotor's
+**Duct** column to `foil`: the fan axis becomes the body X axis (`duct_axis`), the rotor's tilt/dir still define where
+the thrust points, and the readout shows the bend angle. Bending costs thrust: **Jetfoil loss %** on the Motors card is
+the loss at 90°, scaled linearly with the bend (10% default). The effective maximum thrust is used by the physics, the
+hover check and the optimiser; the PX4 export is unchanged (PX4 only needs the thrust direction).
+
+### Wing
+
+The **Wing** card adds a lifting surface (a delta by default) that acts at its position: Polhamus lift (potential +
+vortex lift from the aspect ratio `span² / area`), drag `CD0 + CL·tan α`, and a flat-plate blend past the stall angle.
+Incidence is the chord angle above the structural X axis. It does nothing in hover and carries part of the weight in
+cruise, which is what the Optimize tab trades against the jet angles. A 60° delta has aspect ratio 2.31, so
+`span = sqrt(2.31 · area)`.
 
 Low `km` also means little yaw authority from torque differences. PX4's allocator then needs large thrust differences
 to yaw, which the hover check on the Geometry tab reflects.
@@ -170,6 +186,31 @@ Verified in SITL: all ten ducts at 45°, hover pitch 45° → takes off, rotates
 PX4 reporting +1° pitch. The hover check runs in the hover frame; it will tell you when the axes are not vertical in
 hover (residual force → PX4 leans) or when yaw cannot be cancelled (all rotors spinning the same way with parallel
 axes: alternate spins or cant rotors in opposing pairs).
+
+## Optimize tab: jet angles for hover and cruise
+
+The tab evaluates the current geometry in two conditions and searches the angles that serve both:
+
+* **Hover** at the hover pitch: PX4's pseudo-inverse allocation, the busiest motor's share of its (effective) maximum
+  thrust, the thrust wasted by motors fighting each other, and the roll/pitch/yaw torque available before a motor
+  saturates.
+* **Cruise** at the target speed (Cruise → Speed, saved with the airframe): a trim solve with PX4's allocation in the
+  loop finds the body pitch, collective and pitch torque for zero net force and moment, with wing lift, ram drag,
+  body drag and gravity. It reports the PX4 pitch (structural pitch minus hover pitch; must stay inside
+  `MPC_TILTMAX_AIR`), power relative to hover (momentum theory, per duct), the wing's share of the weight and its
+  angle of attack. It also flags `MPC_XY_VEL_MAX` / `MPC_XY_CRUISE` when they are below the cruise speed.
+
+**Variables**: rotors with identical angles form a group (letters under the table reassign motors). Per group the tilt
+(forward/back, from vertical) and the cant (symmetric left/right lean) can be optimised within a range, plus the hover
+pitch. **Objective**: the slider weights hover margin (busiest motor + wasted thrust) against cruise power (relative
+to hover power); designs with negative or saturated motors, no trim solution, a stalled wing or a PX4 pitch beyond
+the tilt limit are penalised. The search samples the ranges, refines the best starts with Nelder–Mead, and lists the
+best designs by score plus a spread of the Pareto front (● rows: no other design is better in both hover margin and
+cruise power). **Apply** loads a row into the geometry; Update PX4 then exports it as usual.
+
+Verified on ATLAS_04 (13 kg, 50 km/h, 0.5 m² delta at 10°): the optimiser moves the hover pitch to ≈47° with rear
+jets at 50–55° and the front ducts at ≈32–41°, taking the busiest motor from 47% to 38% in hover and cruise power from
+104% to 81% of hover, with the wing carrying ≈40% of the weight at 15° angle of attack.
 
 ## Flying with a USB remote (RadioMaster / EdgeTX)
 
