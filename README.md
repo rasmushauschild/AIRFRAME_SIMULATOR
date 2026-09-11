@@ -171,6 +171,17 @@ PX4 reporting +1° pitch. The hover check runs in the hover frame; it will tell 
 hover (residual force → PX4 leans) or when yaw cannot be cancelled (all rotors spinning the same way with parallel
 axes: alternate spins or cant rotors in opposing pairs).
 
+## Flying with a USB remote (RadioMaster / EdgeTX)
+
+Plug the radio in over USB-C and pick **USB Joystick (HID)** on its screen (Radio settings → USB mode sets the
+default). It shows up as a gamepad; the Flight tab's **USB remote** card picks it up as soon as you move a stick.
+Map roll, pitch, throttle and yaw with *Learn* (press, then move that stick), tick **Send to PX4**, and the page streams
+MAVLink `MANUAL_CONTROL` at 50 Hz, exactly what QGroundControl sends for a joystick. Works for SITL and HITL.
+
+PX4 picks the input source with `COM_RC_IN_MODE`: 3 (default) uses whichever of RC receiver or joystick appears first,
+1 is joystick only. The card's *Input priority* writes it and it is saved with the airframe. Stick arming (throttle low,
+yaw right) works in Stabilized/Position as on a normal radio; use the Arm button otherwise.
+
 ## Notes and limits
 
 * The physics is a clean rigid body with per-rotor thrust/torque, quadratic drag and spring-damper legs. There is no

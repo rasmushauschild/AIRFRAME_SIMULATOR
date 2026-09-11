@@ -489,6 +489,24 @@ def build_app(state: AppState) -> FastAPI:
         await websocket.accept()
         last_log = 0.0
         last_status = 0.0
+
+        async def receive_loop():
+            """Client -> server: joystick frames (and nothing else for now)."""
+            while True:
+                raw = await websocket.receive_text()
+                try:
+                    m = json.loads(raw)
+                except Exception:
+                    continue
+                if m.get("type") == "manual" and link.ctl_connected:
+                    try:
+                        await run_in_threadpool(link.send_manual_control, float(m.get("roll", 0)), float(m.get("pitch", 0)),
+                                                float(m.get("throttle", 0)), float(m.get("yaw", 0)), int(m.get("buttons", 0)),
+                                                [float(v) for v in (m.get("aux") or [])])
+                    except Exception as e:
+                        state.log(f"[joystick] send failed: {e}")
+
+        rx_task = asyncio.create_task(receive_loop())
         try:
             await websocket.send_text(json.dumps({"type": "airframe", "airframe": sim.airframe.to_dict()}))
             while True:
@@ -507,5 +525,7 @@ def build_app(state: AppState) -> FastAPI:
             pass
         except Exception:
             pass
+        finally:
+            rx_task.cancel()
 
     return app

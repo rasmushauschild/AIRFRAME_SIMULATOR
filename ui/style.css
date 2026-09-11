@@ -307,3 +307,8 @@ button.pill.armed:hover { filter: brightness(0.92); background: var(--red); colo
 .ov-row.ro { grid-template-columns: 150px 92px 90px 1fr 22px; }
 .ov-sep { height: 1px; background: var(--line); margin: 8px 0; }
 #param-list { max-height: 360px; overflow-y: auto; }
+
+/* USB joystick */
+.joy-row { display: grid; grid-template-columns: 64px 92px 74px 64px 1fr 44px; gap: 8px; align-items: center; padding: 3px 0; font-size: 12px; }
+.joy-label { color: var(--text-2); font-weight: 600; }
+.joy-row select { padding: 3px 6px; font-size: 12px; }

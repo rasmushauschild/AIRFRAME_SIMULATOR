@@ -90,6 +90,7 @@ class PX4Link:
         self.board_sys: dict = {}            # SYS_STATUS: comm drop rate etc.
         self.rc: dict = {}                   # RC_CHANNELS from the autopilot
         self.board_att: dict = {}            # ATTITUDE as PX4 estimates it (in its own, possibly rotated, frame)
+        self.manual_last: dict = {}          # last MANUAL_CONTROL we sent (USB joystick)
         self._shell_buf = bytearray()
         self._shell_lock = threading.Lock()
         self.recent_events = deque(maxlen=60)
@@ -180,6 +181,20 @@ class PX4Link:
         p = list(params) + [0.0] * (7 - len(params))
         with self._ctl_lock:
             self.ctl.mav.command_long_send(self.target_system, self.target_component, command, 0, *p[:7])
+
+    def send_manual_control(self, roll: float, pitch: float, throttle: float, yaw: float, buttons: int = 0,
+                            aux: list[float] | None = None) -> None:
+        """MAVLink MANUAL_CONTROL, the same message QGroundControl sends for a joystick.
+        roll/pitch/yaw in [-1, 1] (pitch forward positive), throttle in [0, 1], aux channels in [-1, 1]."""
+        c = lambda v: int(max(-1000, min(1000, round(v * 1000))))
+        aux = list(aux or [])[:6] + [0.0] * (6 - len(aux or []))
+        ext = sum(1 << i for i in range(6) if i < len(aux or [])) if aux else 0
+        z = int(max(0, min(1000, round(throttle * 1000))))
+        with self._ctl_lock:
+            self.ctl.mav.manual_control_send(self.target_system, c(pitch), c(roll), z, c(yaw), int(buttons), 0, ext,
+                                             0, 0, *[c(v) for v in aux])
+        self.manual_last = {"roll": roll, "pitch": pitch, "throttle": throttle, "yaw": yaw, "buttons": int(buttons),
+                            "aux": aux, "t": time.time()}
 
     def clear_actuators(self) -> None:
         """Forget the last motor commands (e.g. on reset or while PX4 reboots) so the physics does not keep
@@ -548,6 +563,7 @@ class PX4Link:
             "board_imu": self.board_imu,
             "board_sys": self.board_sys,
             "board_att": self.board_att,
+            "manual": self.manual_last if (self.manual_last and time.time() - self.manual_last.get("t", 0) < 1.0) else {},
             "rc": self.rc if (self.rc and time.time() - self.rc.get("t", 0) < 3.0) else {},
             "last_ack": self.last_ack,
             "qgc_proxy": self.qgc_proxy,

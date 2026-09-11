@@ -158,6 +158,22 @@
       <p class="hint" id="mode-hint">The highlighted pill is the mode PX4 reports. Takeoff is selected automatically once the board is ready. With an RC transmitter on, the transmitter's mode switch takes over again.</p>
       <div id="px4-messages" class="card"></div>
 
+      <h3>USB remote <small>· a RadioMaster / EdgeTX radio on USB-C as a joystick</small></h3>
+      <div id="joy-card" class="card">
+        <div class="conn-row"><div><b id="joy-name">No joystick detected</b><div class="hint" id="joy-hint">Plug the radio in over USB-C and choose <i>USB Joystick (HID)</i> on its screen, then move a stick.</div></div>
+          <label class="row" style="margin:0"><input id="joy-enable" type="checkbox"> Send to PX4</label></div>
+        <div id="joy-map"></div>
+        <div class="row tight" style="margin-top:6px">
+          <label>Input priority on PX4
+            <select id="joy-priority" style="width:210px">
+              <option value="3">RC or joystick, keep first (3)</option>
+              <option value="1">Joystick only (1)</option>
+              <option value="2">RC, joystick as fallback (2)</option>
+            </select></label>
+          <span class="hint" style="align-self:end;padding-bottom:6px">COM_RC_IN_MODE · saved with the airframe</span>
+        </div>
+      </div>
+
       <h3>RC input <small>· what the flight controller receives</small></h3>
       <div id="rc-card" class="card"><div class="hint">no RC data from the flight controller</div></div>
       <p class="help">Fly from QGroundControl for anything beyond these. SITL: QGC connects by itself on UDP 14550.

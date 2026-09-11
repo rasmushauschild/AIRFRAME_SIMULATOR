@@ -1,0 +1,247 @@
+{
+  "name": "ATLAS_03",
+  "mass": 3,
+  "inertia": [
+    0.07547,
+    0.12757,
+    0.18478
+  ],
+  "drag_quadratic": [
+    0.1,
+    0.1,
+    0.2
+  ],
+  "drag_angular": [
+    0.005,
+    0.005,
+    0.005
+  ],
+  "body_size": [
+    0.14,
+    0.12,
+    0.06
+  ],
+  "leg_points": [
+    [
+      0.1195,
+      0.2,
+      0.2563
+    ],
+    [
+      0.1195,
+      -0.2,
+      0.2563
+    ],
+    [
+      -0.2563,
+      0.2,
+      0.1195
+    ],
+    [
+      -0.2563,
+      -0.2,
+      0.1195
+    ]
+  ],
+  "rotors": [
+    {
+      "pos": [
+        -0.3,
+        -0.37,
+        0.14
+      ],
+      "axis": [
+        0.42260624405338415,
+        0.0,
+        -0.9063133908792761
+      ],
+      "km": 0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    },
+    {
+      "pos": [
+        -0.3,
+        0.37,
+        0.14
+      ],
+      "axis": [
+        0.42260624405338415,
+        0.0,
+        -0.9063133908792761
+      ],
+      "km": -0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    },
+    {
+      "pos": [
+        -0.26,
+        -0.28,
+        0.09
+      ],
+      "axis": [
+        0.42260624405338415,
+        0.0,
+        -0.9063133908792761
+      ],
+      "km": -0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    },
+    {
+      "pos": [
+        -0.26,
+        0.28,
+        0.09
+      ],
+      "axis": [
+        0.42260624405338415,
+        0.0,
+        -0.9063133908792761
+      ],
+      "km": 0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    },
+    {
+      "pos": [
+        -0.2,
+        -0.2,
+        0.04
+      ],
+      "axis": [
+        0.42260624405338415,
+        0.0,
+        -0.9063133908792761
+      ],
+      "km": 0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    },
+    {
+      "pos": [
+        -0.2,
+        0.2,
+        0.04
+      ],
+      "axis": [
+        0.42260624405338415,
+        0.0,
+        -0.9063133908792761
+      ],
+      "km": -0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    },
+    {
+      "pos": [
+        -0.16,
+        -0.11,
+        -0.01
+      ],
+      "axis": [
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476
+      ],
+      "km": -0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    },
+    {
+      "pos": [
+        -0.16,
+        0.11,
+        -0.01
+      ],
+      "axis": [
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476
+      ],
+      "km": 0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    },
+    {
+      "pos": [
+        0.45,
+        0,
+        0.08
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": -0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    },
+    {
+      "pos": [
+        0.56,
+        0,
+        0.08
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "km": 0.01,
+      "max_thrust": 36,
+      "tau": 0.12,
+      "prop_diameter": 0.08,
+      "thrust_exponent": 2,
+      "kind": "ducted",
+      "ram_drag": true
+    }
+  ],
+  "hover_pitch_deg": 20,
+  "px4_overrides": {
+    "MIS_TAKEOFF_ALT": 3,
+    "MPC_TKO_RAMP_T": 0.5,
+    "MPC_THR_HOVER": 0.5
+  },
+  "landed_pitch_deg": 20,
+  "leg_height": 0.2,
+  "leg_spread": 0.2
+}

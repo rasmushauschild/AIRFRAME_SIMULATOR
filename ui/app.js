@@ -356,6 +356,7 @@ async function loadParams() {
   const r = await api('/api/params');
   params = r.params || {};
   paramsLoaded = Object.keys(params).length > 0;
+  if (params.COM_RC_IN_MODE) $('#joy-priority').value = String(params.COM_RC_IN_MODE.value);
   loadExport();          // vehicle values are now known: refresh the ✓/≠ marks
   $('#param-count').textContent = `${Object.keys(params).length}/${r.count} loaded · ${Object.keys(meta).length} described`;
   renderParams();
@@ -498,6 +499,7 @@ $('#btn-theme').addEventListener('click', () => {
 
 function connectWs() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  joyWs = ws;
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === 'airframe') { setAirframe(m.airframe); }
@@ -667,3 +669,72 @@ async function refreshConnection() {
   }));
   connTimer = setTimeout(refreshConnection, 2000);
 }
+
+
+// ============================================================ USB joystick (Gamepad API -> MANUAL_CONTROL)
+const JOY_FUNCS = [
+  { key: 'roll', label: 'Roll', axis: 0, invert: false },
+  { key: 'pitch', label: 'Pitch', axis: 1, invert: true },      // stick forward is negative on most gamepads
+  { key: 'throttle', label: 'Throttle', axis: 2, invert: false },
+  { key: 'yaw', label: 'Yaw', axis: 3, invert: false },
+];
+let joyMap = JOY_FUNCS.map(f => ({ ...f }));
+try { const saved = JSON.parse(localStorage.getItem('airframe-joystick') || 'null'); if (saved && saved.length === 4) joyMap = saved; } catch { }
+let joyLearn = null, joyLearnBase = null, joyPad = null, joyWs = null;
+function joyFind() {
+  const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+  joyPad = pads[0] || null;
+  return joyPad;
+}
+function joySave() { try { localStorage.setItem('airframe-joystick', JSON.stringify(joyMap)); } catch { } }
+function joyRenderMap() {
+  const n = joyPad ? joyPad.axes.length : 8;
+  $('#joy-map').innerHTML = joyMap.map((f, i) => `<div class="joy-row"><span class="joy-label">${f.label}</span>
+    <select data-i="${i}" class="joy-axis">${Array.from({ length: n }, (_, a) => `<option value="${a}" ${a === f.axis ? 'selected' : ''}>axis ${a + 1}</option>`).join('')}</select>
+    <label class="row" style="margin:0"><input type="checkbox" data-i="${i}" class="joy-inv" ${f.invert ? 'checked' : ''}> invert</label>
+    <button class="pill small joy-learn" data-i="${i}">${joyLearn === i ? 'move it…' : 'Learn'}</button>
+    <span class="rc-bar joy-bar"><i data-i="${i}" style="width:50%"></i></span><span class="rc-val num joy-val" data-i="${i}">—</span></div>`).join('');
+  $$('.joy-axis').forEach(sel => sel.addEventListener('change', () => { joyMap[+sel.dataset.i].axis = +sel.value; joySave(); }));
+  $$('.joy-inv').forEach(cb => cb.addEventListener('change', () => { joyMap[+cb.dataset.i].invert = cb.checked; joySave(); }));
+  $$('.joy-learn').forEach(b => b.addEventListener('click', () => { joyLearn = +b.dataset.i; joyLearnBase = joyPad ? Array.from(joyPad.axes) : null; joyRenderMap(); }));
+}
+function joyValue(f) {
+  if (!joyPad) return 0;
+  let v = joyPad.axes[f.axis] ?? 0;
+  if (Math.abs(v) < 0.02) v = 0;                  // deadband
+  return f.invert ? -v : v;
+}
+let joyLastSend = 0;
+function joyTick() {
+  const pad = joyFind();
+  const nameEl = $('#joy-name');
+  if (!pad) { nameEl.textContent = 'No joystick detected'; $('#joy-hint').textContent = 'Plug the radio in over USB-C and choose USB Joystick (HID) on its screen, then move a stick.'; }
+  else {
+    nameEl.textContent = pad.id.replace(/\s*\(.*$/, '').slice(0, 48);
+    $('#joy-hint').textContent = `${pad.axes.length} axes, ${pad.buttons.length} buttons`;
+    if (joyLearn != null && joyLearnBase) {
+      let best = -1, bestD = 0.3;
+      pad.axes.forEach((v, a) => { const d = Math.abs(v - joyLearnBase[a]); if (d > bestD) { bestD = d; best = a; } });
+      if (best >= 0) { joyMap[joyLearn].axis = best; joyLearn = null; joyLearnBase = null; joySave(); joyRenderMap(); }
+    }
+    joyMap.forEach((f, i) => {
+      const v = joyValue(f); const bar = document.querySelector(`.joy-bar i[data-i="${i}"]`), val = document.querySelector(`.joy-val[data-i="${i}"]`);
+      if (bar) bar.style.width = ((v + 1) / 2 * 100).toFixed(0) + '%';
+      if (val) val.textContent = v.toFixed(2);
+    });
+    const now = performance.now();
+    if ($('#joy-enable').checked && joyWs && joyWs.readyState === 1 && now - joyLastSend > 20) {   // 50 Hz
+      joyLastSend = now;
+      const g = (k) => joyValue(joyMap.find(f => f.key === k));
+      const aux = pad.axes.slice(4, 10).map(v => +v.toFixed(3));
+      let buttons = 0; pad.buttons.forEach((b, i) => { if (b.pressed && i < 16) buttons |= (1 << i); });
+      joyWs.send(JSON.stringify({ type: 'manual', roll: g('roll'), pitch: g('pitch'), throttle: (g('throttle') + 1) / 2, yaw: g('yaw'), buttons, aux }));
+    }
+  }
+  if ($('#tab-sim').classList.contains('active')) requestAnimationFrame(joyTick); else setTimeout(joyTick, 500);
+}
+window.addEventListener('gamepadconnected', () => { joyFind(); joyRenderMap(); logLine('[ui] joystick connected: ' + (joyPad ? joyPad.id : '')); });
+window.addEventListener('gamepaddisconnected', () => { joyPad = null; joyRenderMap(); });
+$('#joy-enable').addEventListener('change', (e) => logLine('[ui] joystick ' + (e.target.checked ? 'sending to PX4 (MANUAL_CONTROL at 50 Hz)' : 'stopped')));
+$('#joy-priority').addEventListener('change', (e) => setParamValue('COM_RC_IN_MODE', +e.target.value));
+joyRenderMap(); joyTick();
