@@ -13,7 +13,7 @@ export function createScene(canvas, handlers) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const scene = new THREE.Scene();
   const THEMES = {
-    light: { bg: 0xf6f6f8, grid1: 0xc9cad2, grid2: 0xe1e2e8, ground: 0xf3f3f6, body: 0x3a3a3f, arm: 0x9a9aa3, motor: 0x2a2a2f },
+    light: { bg: 0xf6f6f8, grid1: 0xd6d7de, grid2: 0xe6e7ec, ground: 0xf3f3f6, body: 0x3a3a3f, arm: 0x9a9aa3, motor: 0x2a2a2f },
     dark: { bg: 0x131419, grid1: 0x2a2c34, grid2: 0x1d1f26, ground: 0x15161b, body: 0x4a4d57, arm: 0x8a8f9a, motor: 0x22242b },
   };
   let theme = THEMES.light;
@@ -34,9 +34,9 @@ export function createScene(canvas, handlers) {
   // ground
   // a modest grid that fades into the background with distance (fog on the line material), so far-away
   // lines never merge into a solid "ground" tint
-  const GRID_SIZE = 60, GRID_DIV = 60, FOG_NEAR = 12, FOG_FAR = 45;
+  const GRID_SIZE = 40, GRID_DIV = 40, FOG_NEAR = 4, FOG_FAR = 18;
   let grid = new THREE.GridHelper(GRID_SIZE, GRID_DIV, theme.grid1, theme.grid2);
-  grid.material.transparent = true; grid.material.opacity = 0.9;
+  grid.material.transparent = true; grid.material.opacity = 0.7;
   scene.add(grid);
   scene.background = new THREE.Color(theme.bg);
   scene.fog = new THREE.Fog(theme.bg, FOG_NEAR, FOG_FAR);
@@ -66,7 +66,8 @@ export function createScene(canvas, handlers) {
   let legNodes = [];
   let airframe = null;
   let selected = -1;
-  let follow = false;
+  let camMode = 'static';   // 'static' | 'track' (look at the drone) | 'follow' (move with it)
+  const lastVehiclePos = new THREE.Vector3();
 
   // gizmo
   const gizmo = new TransformControls(camera, canvas);
@@ -219,9 +220,14 @@ export function createScene(canvas, handlers) {
       n.disc.rotation.y += (r.km >= 0 ? 1 : -1) * rs.omega * 0.6;
       n.disc.material.opacity = 0.25 + 0.5 * rs.omega;
     });
-    if (follow) {
+    if (camMode === 'track') {
       orbit.target.lerp(vehicle.position, 0.15);
+    } else if (camMode === 'follow') {
+      const delta = vehicle.position.clone().sub(lastVehiclePos);
+      camera.position.add(delta);
+      orbit.target.copy(vehicle.position);
     }
+    lastVehiclePos.copy(vehicle.position);
   }
 
   // ------------------------------------------------------------ loop
@@ -246,7 +252,7 @@ export function createScene(canvas, handlers) {
     scene.fog = new THREE.Fog(theme.bg, FOG_NEAR, FOG_FAR);
     scene.remove(grid);
     grid = new THREE.GridHelper(GRID_SIZE, GRID_DIV, theme.grid1, theme.grid2);
-    grid.material.transparent = true; grid.material.opacity = 0.9;
+    grid.material.transparent = true; grid.material.opacity = 0.7;
     scene.add(grid);
     bodyMat.color.set(theme.body); armMat.color.set(theme.arm); motorMat.color.set(theme.motor);
     rotorNodes.forEach(n => { n.label.material.map = makeSprite(String(n.rotorIndex + 1), name === 'dark' ? '#fafafa' : '#171717', name === 'dark').material.map; });
@@ -255,7 +261,8 @@ export function createScene(canvas, handlers) {
 
   return {
     setAirframe, updateState, select, updateRotorNode, setTheme,
-    setFollow: (b) => { follow = b; if (!b) orbit.target.set(0, 0.1, 0); },
+    setCameraMode: (m) => { camMode = m; if (m === 'static') orbit.target.set(0, 0.1, 0); if (m === 'follow') lastVehiclePos.copy(vehicle.position); },
+    setFollow: (b) => { camMode = b ? 'track' : 'static'; if (!b) orbit.target.set(0, 0.1, 0); },
     setMode: (m) => gizmo.setMode(m),
     get selected() { return selected; },
     focusOrigin: () => { orbit.target.set(0, 0.1, 0); camera.position.set(1.4, 1.0, 1.6); },

@@ -31,7 +31,7 @@ try {
   // no WebGL (hidden window, remote desktop, old GPU): keep the rest of the app working without the 3D view
   console.warn('3D view unavailable:', e.message);
   const noop = () => { };
-  scene = { setAirframe: noop, updateState: noop, select: noop, updateRotorNode: noop, setTheme: noop, setFollow: noop, setMode: noop, selected: -1, focusOrigin: noop };
+  scene = { setAirframe: noop, updateState: noop, select: noop, updateRotorNode: noop, setTheme: noop, setFollow: noop, setCameraMode: noop, setMode: noop, selected: -1, focusOrigin: noop };
   $('#viewport').insertAdjacentHTML('afterbegin', '<div class="hint" style="padding:18px">3D view unavailable in this window (no WebGL). Everything else works.</div>');
 }
 
@@ -444,7 +444,14 @@ async function recover(btn, full) {
 }
 $('#btn-reset').addEventListener('click', (e) => recover(e.target, true));     // everything: vehicle + PX4 reboot
 $('#btn-pause').addEventListener('click', async () => { const r = await api('/api/sim/pause', {}); $('#btn-pause').textContent = r.paused ? 'Resume' : 'Pause'; });
-$('#btn-follow').addEventListener('click', (e) => { e.target.classList.toggle('on'); scene.setFollow(e.target.classList.contains('on')); });
+const CAM_MODES = ['static', 'track', 'follow'], CAM_LABELS = { static: 'Static', track: 'Track', follow: 'Follow' };
+let camMode = 'static';
+$('#btn-follow').addEventListener('click', (e) => {
+  camMode = CAM_MODES[(CAM_MODES.indexOf(camMode) + 1) % CAM_MODES.length];
+  e.target.textContent = CAM_LABELS[camMode];
+  e.target.classList.toggle('on', camMode !== 'static');
+  scene.setCameraMode(camMode);
+});
 $('#sim-speed').addEventListener('change', e => api('/api/sim/speed', { speed: parseFloat(e.target.value) }));
 $('#sim-noise').addEventListener('change', e => api('/api/sim/noise', { enabled: e.target.checked }));
 $('#wind-apply').addEventListener('click', () => api('/api/sim/wind', { north: +$('#wind-n').value, east: +$('#wind-e').value, down: +$('#wind-d').value }));
