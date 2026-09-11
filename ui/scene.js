@@ -13,8 +13,8 @@ export function createScene(canvas, handlers) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const scene = new THREE.Scene();
   const THEMES = {
-    light: { bg: 0xf6f6f8, grid1: 0xd6d7de, grid2: 0xe6e7ec, ground: 0xf3f3f6, body: 0x3a3a3f, arm: 0x9a9aa3, motor: 0x2a2a2f },
-    dark: { bg: 0x131419, grid1: 0x2a2c34, grid2: 0x1d1f26, ground: 0x15161b, body: 0x4a4d57, arm: 0x8a8f9a, motor: 0x22242b },
+    light: { bg: 0xf6f6f8, grid1: 0xb9bac4, grid2: 0xd3d4dc, ground: 0xf3f3f6, body: 0x3a3a3f, arm: 0x9a9aa3, motor: 0x2a2a2f },
+    dark: { bg: 0x131419, grid1: 0x3a3d48, grid2: 0x262931, ground: 0x15161b, body: 0x4a4d57, arm: 0x8a8f9a, motor: 0x22242b },
   };
   let theme = THEMES.light;
 
@@ -34,9 +34,9 @@ export function createScene(canvas, handlers) {
   // ground
   // a modest grid that fades into the background with distance (fog on the line material), so far-away
   // lines never merge into a solid "ground" tint
-  const GRID_SIZE = 40, GRID_DIV = 40, FOG_NEAR = 4, FOG_FAR = 18;
+  const GRID_SIZE = 40, GRID_DIV = 40, FOG_NEAR = 6, FOG_FAR = 24;
   let grid = new THREE.GridHelper(GRID_SIZE, GRID_DIV, theme.grid1, theme.grid2);
-  grid.material.transparent = true; grid.material.opacity = 0.7;
+  grid.material.transparent = true; grid.material.opacity = 0.95;
   scene.add(grid);
   scene.background = new THREE.Color(theme.bg);
   scene.fog = new THREE.Fog(theme.bg, FOG_NEAR, FOG_FAR);
@@ -252,7 +252,7 @@ export function createScene(canvas, handlers) {
     scene.fog = new THREE.Fog(theme.bg, FOG_NEAR, FOG_FAR);
     scene.remove(grid);
     grid = new THREE.GridHelper(GRID_SIZE, GRID_DIV, theme.grid1, theme.grid2);
-    grid.material.transparent = true; grid.material.opacity = 0.7;
+    grid.material.transparent = true; grid.material.opacity = 0.95;
     scene.add(grid);
     bodyMat.color.set(theme.body); armMat.color.set(theme.arm); motorMat.color.set(theme.motor);
     rotorNodes.forEach(n => { n.label.material.map = makeSprite(String(n.rotorIndex + 1), name === 'dark' ? '#fafafa' : '#171717', name === 'dark').material.map; });
