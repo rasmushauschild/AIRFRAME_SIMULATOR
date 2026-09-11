@@ -185,21 +185,24 @@ $('#af-preset').addEventListener('change', async (e) => {
 });
 
 // --- rotor helpers: axis <-> tilt/direction
-const axisToTilt = (a) => {
+// Tilt: forward lean of the thrust axis from vertical (negative = backward). Cant: sideways lean, positive = outward
+// (away from the centreline; for a rotor on the centreline positive = right). Same convention as the Optimize tab.
+const outward = (y) => (y < 0 ? -1 : 1);
+const axisToTilt = (a, y = 1) => {
   const n = Math.hypot(a[0], a[1], a[2]) || 1;
-  const tilt = deg(Math.acos(Math.max(-1, Math.min(1, -a[2] / n))));
-  const dir = (Math.hypot(a[0], a[1]) < 1e-6) ? 0 : deg(Math.atan2(a[1], a[0]));
-  return [tilt, dir];
+  const tilt = deg(Math.asin(Math.max(-1, Math.min(1, a[0] / n))));
+  const cantRight = (Math.hypot(a[1], a[2]) < 1e-6) ? 0 : deg(Math.atan2(a[1], -a[2]));
+  return [tilt, cantRight * outward(y)];
 };
-const tiltToAxis = (tilt, dir) => {
-  const t = tilt * Math.PI / 180, d = dir * Math.PI / 180;
-  return [+(Math.sin(t) * Math.cos(d)).toFixed(4), +(Math.sin(t) * Math.sin(d)).toFixed(4), +(-Math.cos(t)).toFixed(4)];
+const tiltToAxis = (tilt, cant, y = 1) => {
+  const t = tilt * Math.PI / 180, c = cant * outward(y) * Math.PI / 180;
+  return [+Math.sin(t).toFixed(4), +(Math.sin(c) * Math.cos(t)).toFixed(4), +(-Math.cos(c) * Math.cos(t)).toFixed(4)];
 };
 
 function renderRotorTable() {
   const el = $('#rotor-table');
   const rows = airframe.rotors.map((r, i) => rotorRowHtml(i, r)).join('');
-  el.innerHTML = `<table class="grid"><thead><tr><th>#</th><th title="position, m">X</th><th>Y</th><th>Z</th><th title="tilt from vertical, degrees">Tilt°</th><th title="direction of tilt: 0 = forward, 90 = right, 180 = back, -90 = left">Dir°</th><th title="resulting unit thrust vector = CA_ROTORn_AX / AY / AZ">Axis AX AY AZ</th><th title="ducted fans: the fan along the thrust (jet), or a horizontal fan whose jetfoil bends the jet to the thrust axis (foil)">Duct</th><th>Spin</th><th title="max thrust N">Tmax</th><th title="share of max thrust this rotor needs to hover, as PX4's allocator would solve it">Hover</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML = `<table class="grid"><thead><tr><th>#</th><th title="position, m">X</th><th>Y</th><th>Z</th><th title="forward lean of the thrust axis from vertical, degrees; negative = backward">Tilt°</th><th title="sideways lean, degrees; positive = outward from the centreline (right for a rotor on the centreline)">Cant°</th><th title="resulting unit thrust vector = CA_ROTORn_AX / AY / AZ">Axis AX AY AZ</th><th title="ducted fans: the fan along the thrust (jet), or a horizontal fan whose jetfoil bends the jet to the thrust axis (foil)">Duct</th><th>Spin</th><th title="max thrust N">Tmax</th><th title="share of max thrust this rotor needs to hover, as PX4's allocator would solve it">Hover</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   api('/api/airframe/hover_check').then(showHover).catch(() => { });
   el.querySelectorAll('tr[data-i]').forEach(tr => {
     const i = +tr.dataset.i;
@@ -212,13 +215,13 @@ function renderRotorTable() {
 const axisText = (a) => a.map(v => (v >= 0 ? ' ' : '') + v.toFixed(2)).join(' ');
 function rotorRowHtml(i, r) {
   const ccw = r.km >= 0;
-  const [tilt, dir] = axisToTilt(r.axis);
+  const [tilt, cant] = axisToTilt(r.axis, r.pos[1]);
   return `<tr data-i="${i}" class="${i === selected ? 'selected' : ''}"><td class="idx">${i + 1}</td>
   <td><input type="number" step="0.005" data-k="x" value="${r.pos[0]}"></td>
   <td><input type="number" step="0.005" data-k="y" value="${r.pos[1]}"></td>
   <td><input type="number" step="0.005" data-k="z" value="${r.pos[2]}"></td>
   <td><input type="number" step="1" data-k="tilt" value="${+tilt.toFixed(1)}"></td>
-  <td><input type="number" step="5" data-k="dir" value="${+dir.toFixed(1)}"></td>
+  <td><input type="number" step="1" data-k="cant" value="${+cant.toFixed(1)}"></td>
   <td class="axis" title="CA_ROTOR${i}_AX / AY / AZ">${axisText(r.axis)}</td>
   <td>${r.kind === 'ducted' ? `<select data-k="duct"><option value="jet" ${r.duct_axis ? '' : 'selected'}>jet</option><option value="foil" ${r.duct_axis ? 'selected' : ''}>foil</option></select>` : ''}</td>
   <td><span class="spin ${ccw ? 'ccw' : 'cw'}" title="click to flip (KM=${r.km})">${ccw ? 'CCW' : 'CW'}</span></td>
@@ -231,15 +234,15 @@ function renderRotorRow(i) {
   if (!tr) return;
   const r = airframe.rotors[i];
   const set = (k, v) => { const inp = tr.querySelector(`input[data-k="${k}"]`); if (inp && document.activeElement !== inp) inp.value = v; };
-  const [tilt, dir] = axisToTilt(r.axis);
-  set('x', r.pos[0]); set('y', r.pos[1]); set('z', r.pos[2]); set('tilt', +tilt.toFixed(1)); set('dir', +dir.toFixed(1));
+  const [tilt, cant] = axisToTilt(r.axis, r.pos[1]);
+  set('x', r.pos[0]); set('y', r.pos[1]); set('z', r.pos[2]); set('tilt', +tilt.toFixed(1)); set('cant', +cant.toFixed(1));
   const ax = tr.querySelector('td.axis'); if (ax) ax.textContent = axisText(r.axis);
 }
 function applyRow(i, tr) {
   const r = airframe.rotors[i];
   const g = (k) => parseFloat(tr.querySelector(`input[data-k="${k}"]`).value);
   r.pos = [g('x'), g('y'), g('z')];
-  r.axis = tiltToAxis(g('tilt'), g('dir'));
+  r.axis = tiltToAxis(g('tilt'), g('cant'), r.pos[1]);
   r.max_thrust = g('tmax');
   const duct = tr.querySelector('select[data-k="duct"]');
   if (duct) r.duct_axis = duct.value === 'foil' ? [1, 0, 0] : null;
@@ -252,7 +255,7 @@ function renderReadout() {
   const el = $('#rotor-readout');
   if (selected < 0 || !airframe.rotors[selected]) { el.classList.remove('show'); return; }
   const r = airframe.rotors[selected];
-  const [tilt, dir] = axisToTilt(r.axis);
+  const [tilt, cant] = axisToTilt(r.axis, r.pos[1]);
   el.classList.add('show');
   let foil = '';
   if (r.duct_axis) {
@@ -260,7 +263,7 @@ function renderReadout() {
     const bend = deg(Math.acos(Math.max(-1, Math.min(1, (a[0] * d[0] + a[1] * d[1] + a[2] * d[2]) / (na * nd)))));
     foil = ` · jetfoil bends ${bend.toFixed(0)}° (${((1 - (r.turn_loss ?? 0.1) * bend / 90) * 100).toFixed(0)}% thrust)`;
   }
-  el.innerHTML = `<b>Motor ${selected + 1}</b> pos [${r.pos.map(v => fmt(v)).join(', ')}] · axis [${r.axis.map(v => fmt(v, 3)).join(', ')}] (${tilt.toFixed(1)}° from vertical)${foil} · ${r.km >= 0 ? 'CCW' : 'CW'} · CA_ROTOR${selected}_*`;
+  el.innerHTML = `<b>Motor ${selected + 1}</b> pos [${r.pos.map(v => fmt(v)).join(', ')}] · axis [${r.axis.map(v => fmt(v, 3)).join(', ')}] (tilt ${tilt.toFixed(1)}°, cant ${cant.toFixed(1)}°)${foil} · ${r.km >= 0 ? 'CCW' : 'CW'} · CA_ROTOR${selected}_*`;
 }
 $('#rotor-add').addEventListener('click', () => {
   const base = airframe.rotors[selected] || airframe.rotors[airframe.rotors.length - 1] || { pos: [0.2, 0, 0], axis: [0, 0, -1], km: 0.05, max_thrust: 8, tau: 0.04, prop_diameter: 0.25, thrust_exponent: 2, kind: 'prop', ram_drag: false };
@@ -308,8 +311,7 @@ function groupsFromRotors() {   // saved assignment (airframe.design.groups) if 
 function renderGroups() {
   if (!designGroups) return;
   const rows = Object.entries(designGroups).map(([name, g]) => {
-    const r0 = airframe.rotors[g.rotors[0]]; const [tilt] = r0 ? axisToTilt(r0.axis) : [0];
-    const cant = r0 ? deg(Math.atan2(Math.abs(r0.axis[1]), -r0.axis[2])) : 0;
+    const [tilt, cant] = g.rotors[0] < airframe.rotors.length ? axisToTilt(airframe.rotors[g.rotors[0]].axis, airframe.rotors[g.rotors[0]].pos[1]) : [0, 0];
     const prev = g.ui || {};
     return `<tr data-g="${name}"><td class="idx">${name}</td><td class="motors">${g.rotors.map(i => 'M' + (i + 1)).join(' ')}</td>
       <td><input type="checkbox" data-k="tilt-on" ${prev.tilt === false ? '' : 'checked'}> <span class="num">${tilt.toFixed(0)}°</span></td>

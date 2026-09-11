@@ -88,8 +88,9 @@ HITL runs in real time (no lockstep). Keep `--rate` at 250 Hz or below on USB.
 ## Editing an airframe
 
 * Click a rotor in the 3D view or its row in the table. `W` = move gizmo, `E` = rotate the thrust axis, `Esc` = deselect.
-* The table edits the same things numerically: position (FRD metres), tilt from vertical and tilt direction
-  (0° = forward, 90° = right), spin direction (click to flip), max thrust.
+* The table edits the same things numerically: position (FRD metres), tilt (forward lean of the thrust axis from
+  vertical, negative = backward), cant (sideways lean, positive = outward from the centreline), spin direction
+  (click to flip), max thrust. The Optimize tab uses the same two angles.
 * `mirror L/R`, `mirror F/B`, `+ add rotor`, `motor → all` speed up building symmetric layouts.
 * Mass, inertia (`estimate` computes it from the layout), drag, body size and leg geometry live in the same tab.
 * Save/load airframes as JSON in `airframes/`.
@@ -154,7 +155,7 @@ not know about this; it just sees the resulting motion through the simulated sen
 ### Jetfoils (horizontal fans, deflected jets)
 
 A ducted fan can be mounted horizontally with a jetfoil that bends the jet to the thrust direction. Set the rotor's
-**Duct** column to `foil`: the fan axis becomes the body X axis (`duct_axis`), the rotor's tilt/dir still define where
+**Duct** column to `foil`: the fan axis becomes the body X axis (`duct_axis`), the rotor's tilt/cant still define where
 the thrust points, and the readout shows the bend angle. Bending costs thrust: **Jetfoil loss %** on the Motors card is
 the loss at 90°, scaled linearly with the bend (10% default). The effective maximum thrust is used by the physics, the
 hover check and the optimiser; the PX4 export is unchanged (PX4 only needs the thrust direction).
