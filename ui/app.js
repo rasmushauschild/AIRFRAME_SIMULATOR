@@ -466,17 +466,27 @@ $('#sim-noise').addEventListener('change', e => api('/api/sim/noise', { enabled:
 $('#wind-apply').addEventListener('click', () => api('/api/sim/wind', { north: +$('#wind-n').value, east: +$('#wind-e').value, down: +$('#wind-d').value }));
 $('#home-apply').addEventListener('click', () => api('/api/sim/home', { lat: +$('#home-lat').value, lon: +$('#home-lon').value, alt: +$('#home-alt').value }));
 
+// one set of sliders: shows PX4's live motor commands, or drives the physics directly with Manual override on
 function renderMotorSliders() {
   const el = $('#motor-sliders');
-  el.innerHTML = airframe.rotors.map((r, i) => `<label>M${i + 1} <input type="range" min="0" max="1" step="0.01" value="0" data-i="${i}"><span class="mv">0.00</span></label>`).join('');
+  el.innerHTML = airframe.rotors.map((r, i) => `<label><b>M${i + 1}</b> <input type="range" min="0" max="1" step="0.01" value="0" data-i="${i}" ${$('#motor-enable').checked ? '' : 'disabled'}><span class="mv num">0%</span></label>`).join('');
   el.querySelectorAll('input').forEach(inp => inp.addEventListener('input', sendOverride));
 }
 function sendOverride() {
   const vals = $$('#motor-sliders input').map(i => parseFloat(i.value));
-  $$('#motor-sliders .mv').forEach((s, i) => s.textContent = vals[i].toFixed(2));
   if ($('#motor-enable').checked) api('/api/sim/motor_override', { values: vals });
 }
+function updateMotorSliders(st) {
+  const manual = $('#motor-enable').checked;
+  st.rotors.forEach((x, i) => {
+    const inp = document.querySelector(`#motor-sliders input[data-i="${i}"]`), lab = document.querySelector(`#motor-sliders label:nth-child(${i + 1}) .mv`);
+    if (inp && !manual) inp.value = x.cmd.toFixed(2);
+    const pct = airframe.rotors[i] && airframe.rotors[i].max_thrust > 0 ? x.thrust / airframe.rotors[i].max_thrust * 100 : 0;
+    if (lab) lab.textContent = pct.toFixed(0) + '%';
+  });
+}
 $('#motor-enable').addEventListener('change', (e) => {
+  $$('#motor-sliders input').forEach(inp => inp.disabled = !e.target.checked);
   if (e.target.checked) sendOverride(); else api('/api/sim/motor_override', { values: null });
 });
 
@@ -510,9 +520,7 @@ function applyState(st) {
   $('#st-rtf').textContent = `RTF ${st.rtf ? st.rtf.toFixed(2) : '—'}${st.lockstep_timeouts ? ' · ' + st.lockstep_timeouts + ' waits' : ''}`;
   const [r, p, y] = st.euler.map(deg);
   $('#st-pose').textContent = `N ${st.pos[0].toFixed(1)} E ${st.pos[1].toFixed(1)} alt ${(-st.pos[2]).toFixed(2)} m · R ${r.toFixed(0)}° P ${p.toFixed(0)}° Y ${y.toFixed(0)}°${st.on_ground ? ' · on ground' : ''}`;
-  if ($('#tab-sim').classList.contains('active')) {
-    $('#rotor-live').innerHTML = st.rotors.map((x, i) => `<div><b>M${i + 1}</b> cmd ${x.cmd.toFixed(2)} · ω ${x.omega.toFixed(2)} <span class="bar" style="width:${Math.round(x.thrust / (airframe.rotors[i]?.max_thrust || 1) * 120)}px"></span> ${x.thrust.toFixed(2)} N</div>`).join('');
-  }
+  if ($('#tab-sim').classList.contains('active') && airframe) updateMotorSliders(st);
 }
 const logPre = $('#log-pre');
 function logLine(s) { logPre.textContent += s + '\n'; if (logPre.textContent.length > 40000) logPre.textContent = logPre.textContent.slice(-30000); const b = $('#log-body'); b.scrollTop = b.scrollHeight; }

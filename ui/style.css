@@ -312,3 +312,7 @@ button.pill.armed:hover { filter: brightness(0.92); background: var(--red); colo
 .joy-row { display: grid; grid-template-columns: 64px 92px 74px 64px 1fr 44px; gap: 8px; align-items: center; padding: 3px 0; font-size: 12px; }
 .joy-label { color: var(--text-2); font-weight: 600; }
 .joy-row select { padding: 3px 6px; font-size: 12px; }
+
+#motor-sliders label b { width: 30px; color: var(--text); }
+#motor-sliders .mv { width: 42px; text-align: right; color: var(--text-2); }
+#motor-sliders input[type=range]:disabled { opacity: 0.85; }
