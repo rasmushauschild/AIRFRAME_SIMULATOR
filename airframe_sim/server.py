@@ -441,7 +441,9 @@ def build_app(state: AppState) -> FastAPI:
             # restart EKF2 so it aligns from clean data
             state.log(f"[export] board rotation changed ({rot_before} -> {rot_after} deg): resetting sim, restarting estimator")
             sim.reset()
-            await run_in_threadpool(link.restart_estimator)
+            ok_restart = await run_in_threadpool(link.restart_estimator)
+            if not ok_restart and link.mode == "hitl":
+                state.log("[export] estimator restart failed: use Reset to reboot the board")
         failed = [r for r in results if not r["ok"]]
         state.log(f"[export] pushed {len(results) - len(failed)}/{len(results)} params to PX4"
                   + (f", failed: {[r['name'] for r in failed]}" if failed else ""))

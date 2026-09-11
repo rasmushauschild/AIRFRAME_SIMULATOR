@@ -85,6 +85,15 @@ QGroundControl keeps working during HITL: the simulator forwards the vehicle's M
 
 HITL runs in real time (no lockstep). Keep `--rate` at 250 Hz or below on USB.
 
+### HITL and SD logging
+
+The HITL export sets `SDLOG_MODE = -1` (logging off). Starting the SD-card logger at arming starves the USB MAVLink
+link on the board: the HIL sensor stream gaps, EKF2 loses its attitude and PX4 terminates the flight a second after
+"Armed". Verified on an FMU v6X, PX4 v1.17: identical takeoff, logging on → termination, logging off → hover.
+Record HITL flights from the simulator side instead. When the board's shell stops answering (a saturated USB link
+does that; the checklist then shows the estimator restart failing), Reset reboots the board, which is the reliable
+way to get a freshly aligned estimator.
+
 ## Editing an airframe
 
 * Click a rotor in the 3D view or its row in the table. `W` = move gizmo, `E` = rotate the thrust axis, `Esc` = deselect.

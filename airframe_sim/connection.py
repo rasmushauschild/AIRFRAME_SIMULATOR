@@ -470,7 +470,7 @@ class ConnectionManager:
             else:
                 self._reset_busy_until = time.time() + 8
                 threading.Thread(target=self._settle_after_reset, args=(link,), daemon=True).start()
-                steps.append("estimator restarting")
+                steps.append("estimator restarting (board rebooted if that fails)")
         else:
             with self._lock:
                 if main_mode == 10 and self.px4_running() and self.args.launch_px4:
@@ -489,10 +489,19 @@ class ConnectionManager:
         """Let the fresh sensor data flow for a moment, then restart EKF2 so it re-aligns on the reset vehicle."""
         time.sleep(2.0)
         if self.link is link:
+            ok = False
             try:
-                link.restart_estimator()
+                ok = link.restart_estimator()
             except Exception as e:
                 self.log(f"[px4] estimator restart failed: {e}")
+            if not ok and self.mode == "hitl":
+                # the shell is not answering (a saturated USB link does that): a reboot is the reliable way to get a
+                # freshly aligned estimator; the sim is already at rest so it initialises on good data
+                self.log("[px4] rebooting the board to restart the estimator")
+                self._reset_busy_until = time.time() + 30
+                link.reboot()
+                self._after_reboot(link)
+                return
         self._select_default_mode(link)
 
     def _select_default_mode(self, link, timeout: float = 40.0) -> None:
@@ -518,8 +527,8 @@ class ConnectionManager:
         link = self.link
         if link is None or not link.ctl_connected:
             return {"ok": False, "error": "not connected"}
-        out = link.restart_estimator()
-        return {"ok": True, "output": out[-300:]}
+        ok = link.restart_estimator()
+        return {"ok": ok, "error": None if ok else "no reply from the board's shell; use Reset to reboot the board"}
 
     def enable_hitl(self) -> dict:
         """Set SYS_HITL=1 on the board, save, reboot. The serial link reconnects by itself."""
@@ -690,6 +699,12 @@ class ConnectionManager:
                         self.on_params()
                 except Exception as e:
                     self.log(f"[params] fetch failed: {e}")
+                if not link.param_count or len(link.params) < link.param_count:
+                    # the board was still booting (or the link hiccupped): try again on the next pass
+                    self.log("[params] incomplete download, retrying")
+                    fetched_for = -1
+                    time.sleep(3.0)
+                    continue
                 # HITL: the board booted while our sensor stream was (re)starting and the EKF often initialises on
                 # the first bad samples. Once HIL data has flowed for a few seconds, restart the estimator once.
                 if link.mode == "hitl":

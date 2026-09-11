@@ -63,9 +63,9 @@
       "kind": "ducted",
       "ram_drag": true,
       "duct_axis": [
-        1.0,
-        0.0,
-        0.0
+        1,
+        0,
+        0
       ],
       "turn_loss": 0.1
     },
@@ -88,9 +88,9 @@
       "kind": "ducted",
       "ram_drag": true,
       "duct_axis": [
-        1.0,
-        0.0,
-        0.0
+        1,
+        0,
+        0
       ],
       "turn_loss": 0.1
     },
@@ -113,9 +113,9 @@
       "kind": "ducted",
       "ram_drag": true,
       "duct_axis": [
-        1.0,
-        0.0,
-        0.0
+        1,
+        0,
+        0
       ],
       "turn_loss": 0.1
     },
@@ -138,9 +138,9 @@
       "kind": "ducted",
       "ram_drag": true,
       "duct_axis": [
-        1.0,
-        0.0,
-        0.0
+        1,
+        0,
+        0
       ],
       "turn_loss": 0.1
     },
@@ -163,9 +163,9 @@
       "kind": "ducted",
       "ram_drag": true,
       "duct_axis": [
-        1.0,
-        0.0,
-        0.0
+        1,
+        0,
+        0
       ],
       "turn_loss": 0.1
     },
@@ -188,9 +188,9 @@
       "kind": "ducted",
       "ram_drag": true,
       "duct_axis": [
-        1.0,
-        0.0,
-        0.0
+        1,
+        0,
+        0
       ],
       "turn_loss": 0.1
     },
@@ -201,9 +201,9 @@
         -0.01
       ],
       "axis": [
-        0.642816764879845,
+        0.6428167648798451,
         0.0,
-        -0.7660199780615451
+        -0.7660199780615452
       ],
       "km": -0.01,
       "max_thrust": 36,
@@ -213,9 +213,9 @@
       "kind": "ducted",
       "ram_drag": true,
       "duct_axis": [
-        1.0,
-        0.0,
-        0.0
+        1,
+        0,
+        0
       ],
       "turn_loss": 0.1
     },
@@ -226,9 +226,9 @@
         -0.01
       ],
       "axis": [
-        0.642816764879845,
+        0.6428167648798451,
         0.0,
-        -0.7660199780615451
+        -0.7660199780615452
       ],
       "km": -0.01,
       "max_thrust": 36,
@@ -238,9 +238,9 @@
       "kind": "ducted",
       "ram_drag": true,
       "duct_axis": [
-        1.0,
-        0.0,
-        0.0
+        1,
+        0,
+        0
       ],
       "turn_loss": 0.1
     },
@@ -301,19 +301,19 @@
     {
       "pos": [
         -0.2,
-        0.0,
+        0,
         0.06
       ],
       "area": 0.5,
       "span": 1.075,
-      "incidence_deg": 10.0,
+      "incidence_deg": 10,
       "cd0": 0.02,
-      "stall_deg": 30.0,
+      "stall_deg": 30,
       "vortex_lift": true,
       "enabled": true
     }
   ],
   "design": {
-    "cruise_speed_kmh": 50.0
+    "cruise_speed_kmh": 50
   }
 }

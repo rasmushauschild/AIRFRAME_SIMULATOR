@@ -209,6 +209,10 @@ class Airframe:
             p[f"HIL_ACT_FUNC{n}"] = 101 + (n - 1) if n <= len(self.rotors) else 0
         if hitl:
             p["SYS_HITL"] = 1
+            # Starting the SD-card logger at arming starves the USB MAVLink link on the board; the HIL sensor stream
+            # gaps, EKF2 loses its attitude and PX4 terminates the flight. Verified on an FMU v6X: with logging off
+            # the same takeoff succeeds. Logs of HITL flights come from the simulator side instead.
+            p["SDLOG_MODE"] = -1
         return p
 
     def px4_params_file(self, hitl: bool = True) -> str:
@@ -225,7 +229,7 @@ class Airframe:
 
     def geometry_param_names(self) -> set[str]:
         """Parameters px4_params() derives from the geometry (an override of these is ignored)."""
-        return {k for k in self.px4_params(hitl=True) if k not in (self.px4_overrides or {})} | {"SYS_HITL"}
+        return {k for k in self.px4_params(hitl=True) if k not in (self.px4_overrides or {})} | {"SYS_HITL", "SDLOG_MODE"}
 
     # ------------------------------------------------- PX4 hover feasibility
     def hover_check(self) -> dict:
