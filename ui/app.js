@@ -772,7 +772,80 @@ function joyGamepad() {
   if (!p) return null;
   return { name: p.id.replace(/\s*\(.*$/, '').slice(0, 48), axes: Array.from(p.axes), buttons: p.buttons.map(b => b.pressed), kind: 'gamepad' };
 }
+// --- Web Serial: RadioMaster T8L in config (VCP) mode. Protocol taken from RadioMaster's own web configurator:
+// 460800 baud, poll with A5 55 1B 0D 0A every 20 ms, the radio answers frames  EE len <6 bytes header> ch1..ch10 (u16 LE) crc8
+// where crc8 (CRSF polynomial 0xD5) covers bytes [2 .. len] and channels are 988..2012 with 1500 centred.
+let serialPort = null, serialReader = null, serialWriter = null, serialTimer = null;
+const T8L_VID = 0x19F5;
+function crc8(bytes) { let c = 0; for (const b of bytes) { c ^= b; for (let i = 0; i < 8; i++) c = (c & 0x80) ? ((c << 1) ^ 0xD5) & 0xFF : (c << 1) & 0xFF; } return c; }
+async function serialConnect() {
+  if (!navigator.serial) { $('#joy-hint').textContent = 'This browser has no Web Serial (Safari). Open the page in Chrome or Edge.'; return; }
+  let port;
+  try {
+    port = await navigator.serial.requestPort({ filters: [{ usbVendorId: T8L_VID }] });
+  } catch (e) {
+    if (e.name === 'NotFoundError') { try { port = await navigator.serial.requestPort(); } catch (e2) { return; } } else return;
+  }
+  await serialUse(port);
+}
+async function serialUse(port) {
+  try { await port.open({ baudRate: 460800 }); } catch (e) { logLine('[ui] could not open the radio port: ' + e.message + ' (is the RadioMaster config page still connected to it?)'); return; }
+  await serialDisconnect(false);
+  serialPort = port; serialWriter = port.writable.getWriter(); serialReader = port.readable.getReader();
+  joySrc = { name: 'RadioMaster T8L (serial)', axes: new Array(10).fill(0), buttons: [], kind: 'serial', frames: 0, t: 0 };
+  hidDevice = null;
+  const poll = new Uint8Array([0xA5, 0x55, 0x1B, 0x0D, 0x0A]);
+  serialTimer = setInterval(() => { if (serialWriter) serialWriter.write(poll).catch(() => { }); }, 20);
+  logLine('[ui] radio serial link open at 460800, polling channels');
+  joyRenderMap();
+  (async () => {
+    let buf = [];
+    try {
+      while (serialReader) {
+        const { value, done } = await serialReader.read();
+        if (done) break;
+        for (const b of value) buf.push(b);
+        while (buf.length >= 3) {
+          if (buf[0] !== 0xEE) { buf.shift(); continue; }
+          const len = buf[1];
+          if (len < 3 || len > 80) { buf.shift(); continue; }
+          if (buf.length < len + 2) break;
+          const frame = buf.slice(0, len + 2);
+          if (crc8(frame.slice(2, 2 + len - 1)) === frame[len + 1] && len >= 27) {
+            const ch = []; for (let i = 0; i < 10; i++) ch.push(frame[8 + 2 * i] | (frame[9 + 2 * i] << 8));
+            joySrc.axes = ch.map(v => Math.max(-1, Math.min(1, (v - 1500) / 512)));
+            joySrc.frames++; joySrc.t = performance.now();
+          }
+          buf.splice(0, len + 2);
+        }
+        if (buf.length > 4096) buf = [];
+      }
+    } catch (e) { logLine('[ui] radio serial read ended: ' + e.message); }
+    await serialDisconnect(true);
+  })();
+}
+async function serialDisconnect(announce) {
+  if (serialTimer) { clearInterval(serialTimer); serialTimer = null; }
+  const r = serialReader, w = serialWriter, p = serialPort;
+  serialReader = null; serialWriter = null; serialPort = null;
+  try { if (r) { await r.cancel(); r.releaseLock(); } } catch { }
+  try { if (w) { w.releaseLock(); } } catch { }
+  try { if (p) await p.close(); } catch { }
+  if (joySrc && joySrc.kind === 'serial') joySrc = null;
+  if (announce && p) { logLine('[ui] radio serial link closed'); joyRenderMap(); }
+}
+async function serialReconnect() {   // a port granted earlier comes back without the picker
+  if (!navigator.serial) return;
+  try {
+    const ports = await navigator.serial.getPorts();
+    const p = ports.find(x => (x.getInfo().usbVendorId === T8L_VID));
+    if (p) await serialUse(p);
+  } catch { }
+}
+if (navigator.serial) navigator.serial.addEventListener('disconnect', (e) => { if (e.target === serialPort) serialDisconnect(true); });
+
 function joyCurrent() {
+  if (joySrc && joySrc.kind === 'serial' && serialPort) return (performance.now() - joySrc.t < 1000 || joySrc.frames === 0) ? joySrc : { ...joySrc, name: joySrc.name + ' · no data' };
   if (joySrc && joySrc.kind === 'hid' && hidDevice && hidDevice.opened) return joySrc;
   return joyGamepad();
 }
@@ -801,12 +874,12 @@ function joyTick() {
   if (!src) {
     nameEl.textContent = 'No radio connected';
     if (status.radio_vcp_ports && status.radio_vcp_ports.length) {
-      $('#joy-hint').innerHTML = `<span class="warn">The radio is in config (VCP) mode</span> — it shows up as a serial port (${status.radio_vcp_ports[0].replace('/dev/', '')}), not as a joystick. Power it off, then power it on with the Power button only (no M button), reconnect USB, and click Connect radio.`;
+      $('#joy-hint').innerHTML = `RadioMaster found on ${status.radio_vcp_ports[0].replace('/dev/', '')} — click <b>Connect radio</b> and pick it in the serial list.`;
     }
   }
   else {
-    nameEl.textContent = src.name + (src.kind === 'hid' ? '' : ' (gamepad)');
-    $('#joy-hint').textContent = `${src.axes.length} axes, ${src.buttons.length} buttons`;
+    nameEl.textContent = src.name + (src.kind === 'gamepad' ? ' (gamepad)' : '');
+    $('#joy-hint').textContent = src.kind === 'serial' ? `${src.axes.length} channels · ${src.frames} frames` : `${src.axes.length} axes, ${src.buttons.length} buttons`;
     if (joyLearn != null && joyLearnBase) {
       let best = -1, bestD = 0.3;
       src.axes.forEach((v, a) => { const d = Math.abs(v - (joyLearnBase[a] ?? 0)); if (d > bestD) { bestD = d; best = a; } });
@@ -830,7 +903,8 @@ function joyTick() {
 }
 window.addEventListener('gamepadconnected', () => { joyRenderMap(); const s = joyGamepad(); logLine('[ui] gamepad found: ' + (s ? s.name : '')); });
 if (navigator.hid) navigator.hid.addEventListener('disconnect', (e) => { if (e.device === hidDevice) { hidDevice = null; joySrc = null; logLine('[ui] radio disconnected'); joyRenderMap(); } });
-$('#joy-connect').addEventListener('click', joyConnect);
+$('#joy-connect').addEventListener('click', serialConnect);
+$('#joy-connect-hid').addEventListener('click', joyConnect);
 $('#joy-enable').addEventListener('change', (e) => logLine('[ui] radio ' + (e.target.checked ? 'sending to PX4 (MANUAL_CONTROL at 50 Hz)' : 'stopped')));
 $('#joy-priority').addEventListener('change', (e) => setParamValue('COM_RC_IN_MODE', +e.target.value));
-joyRenderMap(); joyTick(); hidReconnect();
+joyRenderMap(); joyTick(); serialReconnect().then(() => { if (!serialPort) hidReconnect(); });

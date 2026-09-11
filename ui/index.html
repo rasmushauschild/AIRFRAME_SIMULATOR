@@ -160,8 +160,9 @@
 
       <div id="joy-card" class="card" style="margin-top:14px">
         <h3 style="margin:0 0 8px">USB remote <small>· SITL only · a RadioMaster / EdgeTX radio on USB-C as a joystick</small></h3>
-        <div class="conn-row"><div><b id="joy-name">No radio connected</b><div class="hint" id="joy-hint">Plug the radio in over USB-C, choose <i>USB Joystick (HID)</i> on its screen, then click Connect radio and pick it from the list.</div></div>
-          <button id="joy-connect" class="pill small primary">Connect radio</button>
+        <div class="conn-row"><div><b id="joy-name">No radio connected</b><div class="hint" id="joy-hint">RadioMaster T8L: power it on with M + Power (config mode), plug in USB-C, click Connect radio and pick "RadioMaster T8L" in the serial list. EdgeTX radios: USB Joystick mode, then "HID joystick".</div></div>
+          <button id="joy-connect" class="pill small primary" title="Web Serial: RadioMaster T8L in config (VCP) mode">Connect radio</button>
+          <button id="joy-connect-hid" class="pill small" title="WebHID: a radio in USB Joystick mode (EdgeTX, or the T8L's simulator mode)">HID joystick</button>
           <label class="row" style="margin:0"><input id="joy-enable" type="checkbox"> Send to PX4</label></div>
         <div id="joy-map"></div>
         <div class="row tight" style="margin-top:6px">
