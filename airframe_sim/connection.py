@@ -231,6 +231,13 @@ class ConnectionManager:
                 self._close_link()
                 launch = self.args.launch_px4 if launch is None else launch
                 instance = self.args.px4_instance
+                if instance is None and self.px4_running() and self.px4_instance is not None:
+                    # reconnecting to SITL: the PX4 we launched still holds its instance. Keep the instance and start
+                    # it fresh, because PX4's simulator link does not recover once the simulator side has closed.
+                    instance = self.px4_instance
+                    self.log(f"[px4] reconnecting SITL: restarting our PX4 instance {instance}")
+                    self.stop_px4()
+                    time.sleep(0.5)
                 if instance is None:
                     instance = free_px4_instance() if launch else 0
                     if instance:
