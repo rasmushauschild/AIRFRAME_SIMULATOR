@@ -21,10 +21,19 @@ let pushTimer = null;
 let joyWs = null;          // websocket handle used by the USB remote (declared early: connectWs() runs before the joystick code)
 
 // ============================================================ scene
-const scene = createScene($('#c'), {
-  onSelect: (i) => { selected = i; renderRotorTable(); renderReadout(); },
-  onRotorChanged: (i, r, commit) => { renderRotorRow(i); renderReadout(); if (commit) pushAirframe(); },
-});
+let scene;
+try {
+  scene = createScene($('#c'), {
+    onSelect: (i) => { selected = i; renderRotorTable(); renderReadout(); },
+    onRotorChanged: (i, r, commit) => { renderRotorRow(i); renderReadout(); if (commit) pushAirframe(); },
+  });
+} catch (e) {
+  // no WebGL (hidden window, remote desktop, old GPU): keep the rest of the app working without the 3D view
+  console.warn('3D view unavailable:', e.message);
+  const noop = () => { };
+  scene = { setAirframe: noop, updateState: noop, select: noop, updateRotorNode: noop, setTheme: noop, setFollow: noop, setMode: noop, selected: -1, focusOrigin: noop };
+  $('#viewport').insertAdjacentHTML('afterbegin', '<div class="hint" style="padding:18px">3D view unavailable in this window (no WebGL). Everything else works.</div>');
+}
 
 // ============================================================ tabs
 $$('.tabs button').forEach(b => b.addEventListener('click', () => {
