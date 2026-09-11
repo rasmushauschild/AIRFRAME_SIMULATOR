@@ -286,12 +286,21 @@ function updateFooter() {
   armBtn.classList.toggle('armed', !!status.armed);
   armBtn.disabled = !status.ctl_connected || (!status.armed && !status.arm_ready);
   if (!status.armed && status.ctl_connected && !status.arm_ready) armBtn.title = 'Not armable yet: ' + (status.arm_block_reason || 'estimator not ready');
+  const tko = $('#btn-takeoff');
+  tko.disabled = !status.ctl_connected || (!status.armed && !status.arm_ready);
+  tko.classList.toggle('hidden', !!status.armed && !status.on_ground_hint && false);
   const upd = $('#btn-update');
   upd.disabled = !status.ctl_connected || !!status.armed;
   upd.title = status.armed ? 'Disarm first: PX4 rebuilds its allocation when these parameters change' :
     (status.ctl_connected ? 'Write the rotor geometry and output mapping to the flight controller and save it' : 'PX4 not connected');
   $$('#mode-pills .pill').forEach(b => b.classList.toggle('active', status.connected && (status.mode_name || '').toLowerCase() === b.textContent.toLowerCase()));
 }
+$('#btn-takeoff').addEventListener('click', async () => {
+  try {
+    if (!status.armed) { await api('/api/px4/command', { command: 'arm' }); await new Promise(r => setTimeout(r, 1500)); }
+    await api('/api/px4/command', { command: 'takeoff' });
+  } catch (e) { logLine('[ui] ' + e.message); }
+});
 $('#btn-arm').addEventListener('click', async () => {
   try { await api('/api/px4/command', status.armed ? { command: 'kill', force: true } : { command: 'arm' }); } catch (e) { logLine('[ui] ' + e.message); }
 });
