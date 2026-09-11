@@ -18,6 +18,7 @@ let status = {};
 let params = {};
 let meta = {};
 let pushTimer = null;
+let joyWs = null;          // websocket handle used by the USB remote (declared early: connectWs() runs before the joystick code)
 
 // ============================================================ scene
 const scene = createScene($('#c'), {
@@ -465,6 +466,8 @@ function applyStatus(s) {
     : s.connected ? (s.mode === 'hitl' ? s.address.replace('/dev/', '') + (s.hil_enabled ? '' : ' · HITL off') : 'PX4 connected')
     : (s.mode === 'sitl' ? (s.px4_running ? 'PX4 starting…' : 'waiting for PX4') : 'no data from ' + s.address.replace('/dev/', ''));
   $('#st-link .dot').classList.toggle('on', s.connected);
+  const joyCard = $('#joy-card');
+  if (joyCard) { const sitl = s.conn_mode === 'sitl'; joyCard.classList.toggle('hidden', !sitl); if (!sitl) $('#joy-enable').checked = false; }
   const det = $('#st-detected');
   const showDet = !s.flashing && s.mode !== 'hitl' && s.px4_ports && s.px4_ports.length > 0;
   if (s.flashing) { $('#st-mode').textContent = 'Pixhawk'; $('#st-conn').textContent = 'flashing firmware…'; }
@@ -680,7 +683,7 @@ const JOY_FUNCS = [
 ];
 let joyMap = JOY_FUNCS.map(f => ({ ...f }));
 try { const saved = JSON.parse(localStorage.getItem('airframe-joystick') || 'null'); if (saved && saved.length === 4) joyMap = saved; } catch { }
-let joyLearn = null, joyLearnBase = null, joyPad = null, joyWs = null;
+let joyLearn = null, joyLearnBase = null, joyPad = null;
 function joyFind() {
   const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
   joyPad = pads[0] || null;
@@ -723,7 +726,7 @@ function joyTick() {
       if (val) val.textContent = v.toFixed(2);
     });
     const now = performance.now();
-    if ($('#joy-enable').checked && joyWs && joyWs.readyState === 1 && now - joyLastSend > 20) {   // 50 Hz
+    if ($('#joy-enable').checked && status.conn_mode === 'sitl' && joyWs && joyWs.readyState === 1 && now - joyLastSend > 20) {   // 50 Hz, SITL only
       joyLastSend = now;
       const g = (k) => joyValue(joyMap.find(f => f.key === k));
       const aux = pad.axes.slice(4, 10).map(v => +v.toFixed(3));

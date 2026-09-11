@@ -498,7 +498,7 @@ def build_app(state: AppState) -> FastAPI:
                     m = json.loads(raw)
                 except Exception:
                     continue
-                if m.get("type") == "manual" and link.ctl_connected:
+                if m.get("type") == "manual" and link.ctl_connected and state.conn.mode == "sitl":   # USB remote is SITL-only
                     try:
                         await run_in_threadpool(link.send_manual_control, float(m.get("roll", 0)), float(m.get("pitch", 0)),
                                                 float(m.get("throttle", 0)), float(m.get("yaw", 0)), int(m.get("buttons", 0)),
