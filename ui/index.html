@@ -77,7 +77,7 @@
         <label title="Nose-up pitch of the airframe in hover. PX4 treats this attitude as level: the geometry is exported rotated into that frame and SENS_BOARD_Y_OFF is set to match.">Hover pitch° <input id="af-hover" type="number" step="1" min="-90" max="90"></label>
       </div>
 
-      <h3>Rotors <small>· PX4 body frame FRD: X forward, Y right, Z down, metres</small></h3>
+      <h3>Rotors</h3>
       <div id="rotor-table"></div>
       <div class="row tight">
         <button id="rotor-add" class="pill small">+ Rotor</button>
@@ -86,7 +86,7 @@
         <button id="rotor-apply-all" class="pill small" title="Copy thrust, tau and prop size of the selected rotor to all rotors">Motor → all</button>
       </div>
 
-      <h3>Motors <small>· applies to all rotors</small></h3>
+      <h3>Motors</h3>
       <div class="row">
         <label>Type <select id="m-kind" style="width:130px"><option value="prop">Propeller</option><option value="ducted">Ducted fan</option></select></label>
         <label title="max thrust per rotor, N">Tmax N <input id="m-tmax" type="number" step="0.5" min="0"></label>
@@ -116,7 +116,7 @@
       </details>
       <div id="af-problems" class="problems"></div>
 
-      <h3>Edited parameters <small>· everything this airframe sets on PX4; saved with it, pushed by Update PX4</small></h3>
+      <h3>Edited parameters</h3>
       <div id="px4-export-status"></div>
       <div id="overrides" class="card"></div>
       <div class="row tight">
@@ -155,31 +155,7 @@
         <button class="pill small" data-cmd="mode" data-mode="rtl">RTL</button>
         <button class="pill small" data-cmd="mode" data-mode="mission">Mission</button>
       </div>
-      <p class="hint" id="mode-hint">The highlighted pill is the mode PX4 reports. Takeoff is selected automatically once the board is ready. With an RC transmitter on, the transmitter's mode switch takes over again.</p>
       <div id="px4-messages" class="card"></div>
-
-      <div id="joy-card" class="card" style="margin-top:14px">
-        <h3 style="margin:0 0 8px">USB remote <small>· SITL only · a RadioMaster / EdgeTX radio on USB-C as a joystick</small></h3>
-        <div class="conn-row"><div><b id="joy-name">No radio connected</b><div class="hint" id="joy-hint">RadioMaster T8L: power it on with M + Power (config mode), plug in USB-C, click Connect radio and pick "RadioMaster T8L" in the serial list. EdgeTX radios: USB Joystick mode, then "HID joystick".</div></div>
-          <button id="joy-connect" class="pill small primary" title="Web Serial: RadioMaster T8L in config (VCP) mode">Connect radio</button>
-          <button id="joy-connect-hid" class="pill small" title="WebHID: a radio in USB Joystick mode (EdgeTX, or the T8L's simulator mode)">HID joystick</button>
-          <label class="row" style="margin:0"><input id="joy-enable" type="checkbox"> Send to PX4</label></div>
-        <div id="joy-map"></div>
-        <div class="row tight" style="margin-top:6px">
-          <label>Input priority on PX4
-            <select id="joy-priority" style="width:210px">
-              <option value="3">RC or joystick, keep first (3)</option>
-              <option value="1">Joystick only (1)</option>
-              <option value="2">RC, joystick as fallback (2)</option>
-            </select></label>
-          <span class="hint" style="align-self:end;padding-bottom:6px">COM_RC_IN_MODE · saved with the airframe</span>
-        </div>
-      </div>
-
-      <h3>RC input <small>· what the flight controller receives</small></h3>
-      <div id="rc-card" class="card"><div class="hint">no RC data from the flight controller</div></div>
-      <p class="help">Fly from QGroundControl for anything beyond these. SITL: QGC connects by itself on UDP 14550.
-        HITL: the simulator forwards the Pixhawk's MAVLink to UDP 14550, so turn off QGC's serial auto-connect.</p>
 
       <h3>Simulation</h3>
       <div class="row">
@@ -199,7 +175,7 @@
         <button id="home-apply" class="pill small">Apply</button>
       </div>
 
-      <h3>Motor test <small>· bypasses PX4, drives the physics directly</small></h3>
+      <h3>Motor test</h3>
       <label class="row"><input id="motor-enable" type="checkbox"> Enable override</label>
       <div id="motor-sliders"></div>
 
@@ -216,7 +192,7 @@
       <h3>Connect to</h3>
       <div class="card" id="conn-sitl-card">
         <div class="conn-row">
-          <div><b>PX4 SITL</b><div class="hint">Simulated flight controller on this Mac, started for you.</div></div>
+          <div><b>PX4 SITL</b></div>
           <button class="pill small" id="conn-sitl">Use SITL</button>
         </div>
       </div>
@@ -228,15 +204,15 @@
         <button class="pill small" id="conn-reboot" title="Reboot the flight controller; the link reconnects by itself">Reboot board</button>
       </div>
 
+      <h3>Remote</h3>
+      <div id="joy-card" class="card">
+        <div class="conn-row"><div><b id="joy-name">No radio connected</b><div class="hint" id="joy-hint"></div></div>
+          <button id="joy-connect" class="pill small primary">Connect radio</button></div>
+        <div id="joy-map"></div>
+      </div>
+
       <h3>HITL checklist</h3>
       <div id="conn-checklist" class="card"></div>
-      <p class="help" id="conn-help">
-        <b>How HITL works here.</b> The Pixhawk runs its normal firmware. The simulator feeds it IMU, magnetometer,
-        barometer and GPS over USB and takes its motor outputs back into the physics. Steps: plug the board in over
-        USB, click <i>Connect</i>, then <i>Enable HITL</i> if the checklist asks for it (sets <code>SYS_HITL = 1</code>, saves and reboots),
-        then <i>Push geometry</i>. QGroundControl keeps working through UDP 14550, but disable its
-        <i>serial</i> auto-connect (Application Settings → General → AutoConnect) or it will grab the USB port first.
-      </p>
     </section>
     </div>
     <div class="panel-foot">

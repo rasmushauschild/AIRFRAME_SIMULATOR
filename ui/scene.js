@@ -13,7 +13,7 @@ export function createScene(canvas, handlers) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const scene = new THREE.Scene();
   const THEMES = {
-    light: { bg: 0xf6f6f8, grid1: 0xd6d7dd, grid2: 0xe6e7ec, ground: 0xf3f3f6, body: 0x3a3a3f, arm: 0x9a9aa3, motor: 0x2a2a2f },
+    light: { bg: 0xf6f6f8, grid1: 0xd0d1d8, grid2: 0xe4e5ea, ground: 0xf3f3f6, body: 0x3a3a3f, arm: 0x9a9aa3, motor: 0x2a2a2f },
     dark: { bg: 0x131419, grid1: 0x2a2c34, grid2: 0x1d1f26, ground: 0x15161b, body: 0x4a4d57, arm: 0x8a8f9a, motor: 0x22242b },
   };
   let theme = THEMES.light;
@@ -34,10 +34,7 @@ export function createScene(canvas, handlers) {
   // ground
   let grid = new THREE.GridHelper(200, 200, theme.grid1, theme.grid2);
   scene.add(grid);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: theme.ground, roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.002;
-  scene.add(ground);
+  // no ground plane: just the grid on the background colour
   // world axes: N (red x), E (blue z), up (green)
   scene.add(new THREE.AxesHelper(0.5));
   addLabel(scene, 'N', [0.55, 0.02, 0], 0xff3b30);
@@ -244,7 +241,6 @@ export function createScene(canvas, handlers) {
     scene.remove(grid);
     grid = new THREE.GridHelper(200, 200, theme.grid1, theme.grid2);
     scene.add(grid);
-    ground.material.color.set(theme.ground);
     bodyMat.color.set(theme.body); armMat.color.set(theme.arm); motorMat.color.set(theme.motor);
     rotorNodes.forEach(n => { n.label.material.map = makeSprite(String(n.rotorIndex + 1), name === 'dark' ? '#fafafa' : '#171717', name === 'dark').material.map; });
   }

@@ -366,7 +366,6 @@ async function loadParams() {
   const r = await api('/api/params');
   params = r.params || {};
   paramsLoaded = Object.keys(params).length > 0;
-  if (params.COM_RC_IN_MODE) $('#joy-priority').value = String(params.COM_RC_IN_MODE.value);
   loadExport();          // vehicle values are now known: refresh the ✓/≠ marks
   $('#param-count').textContent = `${Object.keys(params).length}/${r.count} loaded · ${Object.keys(meta).length} described`;
   renderParams();
@@ -476,7 +475,7 @@ function applyStatus(s) {
     : (s.mode === 'sitl' ? (s.px4_running ? 'PX4 starting…' : 'waiting for PX4') : 'no data from ' + s.address.replace('/dev/', ''));
   $('#st-link .dot').classList.toggle('on', s.connected);
   const joyCard = $('#joy-card');
-  if (joyCard) { const sitl = s.conn_mode === 'sitl'; joyCard.classList.toggle('hidden', !sitl); if (!sitl) $('#joy-enable').checked = false; }
+  if (joyCard) joyCard.classList.toggle('hidden', s.conn_mode !== 'sitl');
   const det = $('#st-detected');
   const showDet = !s.flashing && s.mode !== 'hitl' && s.px4_ports && s.px4_ports.length > 0;
   if (s.flashing) { $('#st-mode').textContent = 'Pixhawk'; $('#st-conn').textContent = 'flashing firmware…'; }
@@ -607,27 +606,6 @@ async function refreshEvents() {
   } catch (e) { }
   eventsTimer = setTimeout(refreshEvents, 2000);
 }
-let rcTimer = null;
-async function refreshRc() {
-  clearTimeout(rcTimer);
-  if (!$('#tab-sim').classList.contains('active')) return;
-  try {
-    const rc = await api('/api/rc');
-    const el = $('#rc-card');
-    if (!rc.channels || !rc.channels.length) {
-      el.innerHTML = `<div class="hint">no RC data from the flight controller${rc.rc_in_mode != null ? ' · COM_RC_IN_MODE = ' + rc.rc_in_mode : ''}. Plug a receiver into the board, or use a joystick through QGroundControl.</div>`;
-    } else {
-      const rows = rc.channels.map((v, i) => {
-        const pct = Math.max(0, Math.min(1, (v - 1000) / 1000));
-        const names = (rc.mapping[String(i + 1)] || []).join(', ');
-        return `<div class="rc-row"><span class="rc-n">${i + 1}</span><span class="rc-name">${names}</span><span class="rc-bar"><i style="width:${(pct * 100).toFixed(0)}%"></i></span><span class="rc-val num">${v}</span></div>`;
-      }).join('');
-      el.innerHTML = `<div class="rc-head"><b>${rc.count} channels</b><span class="hint">RSSI ${rc.rssi === 255 ? '—' : rc.rssi}${rc.rc_in_mode != null ? ' · COM_RC_IN_MODE ' + rc.rc_in_mode : ''}</span></div>${rows}`;
-    }
-  } catch (e) { }
-  rcTimer = setTimeout(refreshRc, 200);
-}
-$$('.tabs button').forEach(b => b.addEventListener('click', () => { if (b.dataset.tab === 'sim') refreshRc(); }));
 $$('.tabs button').forEach(b => b.addEventListener('click', () => { if (b.dataset.tab === 'sim') refreshEvents(); }));
 async function connectHitl(serial) {
   await connCall('/api/connection/connect', { mode: 'hitl', serial, baud: +$('#conn-baud').value || 921600 });
@@ -846,8 +824,7 @@ if (navigator.serial) navigator.serial.addEventListener('disconnect', (e) => { i
 
 function joyCurrent() {
   if (joySrc && joySrc.kind === 'serial' && serialPort) return (performance.now() - joySrc.t < 1000 || joySrc.frames === 0) ? joySrc : { ...joySrc, name: joySrc.name + ' · no data' };
-  if (joySrc && joySrc.kind === 'hid' && hidDevice && hidDevice.opened) return joySrc;
-  return joyGamepad();
+  return null;
 }
 function joyRenderMap() {
   const src = joyCurrent();
@@ -873,13 +850,11 @@ function joyTick() {
   const nameEl = $('#joy-name');
   if (!src) {
     nameEl.textContent = 'No radio connected';
-    if (status.radio_vcp_ports && status.radio_vcp_ports.length) {
-      $('#joy-hint').innerHTML = `RadioMaster found on ${status.radio_vcp_ports[0].replace('/dev/', '')} — click <b>Connect radio</b> and pick it in the serial list.`;
-    }
+    $('#joy-hint').textContent = (status.radio_vcp_ports && status.radio_vcp_ports.length) ? status.radio_vcp_ports[0].replace('/dev/', '') : '';
   }
   else {
     nameEl.textContent = src.name + (src.kind === 'gamepad' ? ' (gamepad)' : '');
-    $('#joy-hint').textContent = src.kind === 'serial' ? `${src.axes.length} channels · ${src.frames} frames` : `${src.axes.length} axes, ${src.buttons.length} buttons`;
+    $('#joy-hint').textContent = src.kind === 'serial' ? `${src.axes.length} channels` : `${src.axes.length} axes`;
     if (joyLearn != null && joyLearnBase) {
       let best = -1, bestD = 0.3;
       src.axes.forEach((v, a) => { const d = Math.abs(v - (joyLearnBase[a] ?? 0)); if (d > bestD) { bestD = d; best = a; } });
@@ -891,7 +866,7 @@ function joyTick() {
       if (val) val.textContent = v.toFixed(2);
     });
     const now = performance.now();
-    if ($('#joy-enable').checked && status.conn_mode === 'sitl' && joyWs && joyWs.readyState === 1 && now - joyLastSend > 20) {   // 50 Hz, SITL only
+    if (status.conn_mode === 'sitl' && joyWs && joyWs.readyState === 1 && now - joyLastSend > 20) {   // 50 Hz, SITL only
       joyLastSend = now;
       const g = (k) => joyValue(src, joyMap.find(f => f.key === k));
       const aux = src.axes.slice(4, 10).map(v => +v.toFixed(3));
@@ -899,12 +874,8 @@ function joyTick() {
       joyWs.send(JSON.stringify({ type: 'manual', roll: g('roll'), pitch: g('pitch'), throttle: (g('throttle') + 1) / 2, yaw: g('yaw'), buttons, aux }));
     }
   }
-  if ($('#tab-sim').classList.contains('active')) requestAnimationFrame(joyTick); else setTimeout(joyTick, 500);
+  if (src || $('#tab-connect').classList.contains('active')) requestAnimationFrame(joyTick); else setTimeout(joyTick, 500);
 }
-window.addEventListener('gamepadconnected', () => { joyRenderMap(); const s = joyGamepad(); logLine('[ui] gamepad found: ' + (s ? s.name : '')); });
 if (navigator.hid) navigator.hid.addEventListener('disconnect', (e) => { if (e.device === hidDevice) { hidDevice = null; joySrc = null; logLine('[ui] radio disconnected'); joyRenderMap(); } });
 $('#joy-connect').addEventListener('click', serialConnect);
-$('#joy-connect-hid').addEventListener('click', joyConnect);
-$('#joy-enable').addEventListener('change', (e) => logLine('[ui] radio ' + (e.target.checked ? 'sending to PX4 (MANUAL_CONTROL at 50 Hz)' : 'stopped')));
-$('#joy-priority').addEventListener('change', (e) => setParamValue('COM_RC_IN_MODE', +e.target.value));
-joyRenderMap(); joyTick(); serialReconnect().then(() => { if (!serialPort) hidReconnect(); });
+joyRenderMap(); joyTick(); serialReconnect();
