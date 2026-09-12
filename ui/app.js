@@ -676,9 +676,20 @@ function applyStatus(s) {
   if (s.params_loaded && !paramsLoaded && $('#tab-airframe').classList.contains('active')) ensureParams();
   updateFooter();
 }
+const effectiveMax = (r) => {
+  if (!r.duct_axis) return r.max_thrust;
+  const a = r.axis, d = r.duct_axis, na = Math.hypot(...a) || 1, nd = Math.hypot(...d) || 1;
+  const bend = deg(Math.acos(Math.max(-1, Math.min(1, (a[0] * d[0] + a[1] * d[1] + a[2] * d[2]) / (na * nd)))));
+  return r.max_thrust * Math.max(0, 1 - (r.turn_loss ?? 0.1) * bend / 90);
+};
 function applyState(st) {
   scene.updateState(st);
   $('#st-time').textContent = `${st.t.toFixed(1)} s`;
+  if (airframe && st.rotors && st.rotors.length) {
+    const total = st.rotors.reduce((a, r) => a + (r.thrust || 0), 0);
+    const max = airframe.rotors.reduce((a, r) => a + effectiveMax(r), 0);
+    $('#st-thrust').textContent = max > 0 ? `Thrust ${(100 * total / max).toFixed(0)}% · ${total.toFixed(0)} N` : 'Thrust —';
+  }
   $('#st-rtf').textContent = `RTF ${st.rtf ? st.rtf.toFixed(2) : '—'}${st.lockstep_timeouts ? ' · ' + st.lockstep_timeouts + ' waits' : ''}`;
   const [r, p, y] = st.euler.map(deg);
   $('#st-pose').textContent = `N ${st.pos[0].toFixed(1)} E ${st.pos[1].toFixed(1)} alt ${(-st.pos[2]).toFixed(2)} m · R ${r.toFixed(0)}° P ${p.toFixed(0)}° Y ${y.toFixed(0)}°${st.on_ground ? ' · on ground' : ''}`;
