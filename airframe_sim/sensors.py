@@ -113,7 +113,11 @@ class SensorSuite:
         return dict(
             time_usec=int(time_usec), fix_type=3,
             lat=int(round(lat * 1e7)), lon=int(round(lon * 1e7)), alt=int(round(alt * 1000)),
-            eph=100, epv=150, vel=int(round(vh * 100)),
+            # report the accuracy the noise model actually delivers (a modern receiver, not a 1.5 m one): PX4's
+            # EKF weights GPS by eph/epv, and an under-reported accuracy leaves touchdown transients in the
+            # vertical estimate for tens of seconds, which the land detector then reads as vertical movement
+            eph=int(round(max(0.3, 3 * self.noise.gps_pos) * 100)), epv=int(round(max(0.5, 3 * self.noise.gps_alt) * 100)),
+            vel=int(round(vh * 100)),
             vn=int(round(v[0] * 100)), ve=int(round(v[1] * 100)), vd=int(round(v[2] * 100)),
             cog=int(round(cog * 100)), satellites_visible=12, id=0,
             yaw=yaw_cdeg if yaw_cdeg != 0 else 36000,

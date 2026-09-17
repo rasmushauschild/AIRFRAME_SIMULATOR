@@ -195,6 +195,7 @@ class RigidBodySim:
         vel, acc, dq, ang_acc, d_omega, F_ned, thrust, on_ground, R = self._deriv(
             self.pos, self.vel, self.q, self.rates, self.omega)
 
+        vel_before = self.vel.copy()
         self.omega = np.clip(self.omega + d_omega * dt, 0.0, 1.0)
         self.vel = self.vel + acc * dt
         self.pos = self.pos + self.vel * dt
@@ -207,9 +208,13 @@ class RigidBodySim:
             self.vel *= 0.5
             self.rates *= 0.5
 
-        # accelerometer reads specific force: (a - g) in body frame
+        # accelerometer reads specific force: (a - g) in body frame. Use the velocity change the vehicle actually
+        # made this step, not the force-derived acceleration: on the ground the rest damping above changes the
+        # velocity without a force, and an accelerometer that disagrees with the motion makes PX4's EKF integrate
+        # a phantom climb (it then reports "vertical velocity unstable", mis-times landing detection and starts
+        # the next takeoff believing it is airborne).
         gravity_ned = np.array([0.0, 0.0, G])
-        self.accel_body = R.T @ (acc - gravity_ned)
+        self.accel_body = R.T @ ((self.vel - vel_before) / dt - gravity_ned)
         self.thrust = thrust
         self.on_ground = on_ground
         self.t += dt
