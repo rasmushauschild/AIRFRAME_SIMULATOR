@@ -416,6 +416,9 @@ async function loadExport() {
   let r;
   try { r = await api('/api/px4/export'); } catch (e) { return; }
   lastExport = r;
+  // the server is the source of truth for edited parameters (they can also be set through the API or by
+  // another browser tab); keep this tab's copy in sync so a geometry edit never pushes a stale set back
+  if (airframe && r.overrides) airframe.px4_overrides = r.overrides;
   renderOverrides(r);
   $('#px4-export-status').innerHTML = r.problems.length ? `<div class="problems">⚠ ${r.problems.join('<br>⚠ ')}</div>` : '';
 }
